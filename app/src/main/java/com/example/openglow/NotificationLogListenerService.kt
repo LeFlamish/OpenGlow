@@ -1,4 +1,4 @@
-package com.example.openglaw
+package com.example.openglow
 
 import android.app.Notification
 import android.content.pm.PackageManager

@@ -1,4 +1,4 @@
-package com.example.openglaw
+package com.example.openglow
 
 /**
  * 알림 구조 확인 대상 앱 패키지 목록입니다.

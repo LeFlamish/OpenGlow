@@ -1,4 +1,4 @@
-package com.example.openglaw
+package com.example.openglow
 
 import android.os.Bundle
 import android.os.Parcelable
