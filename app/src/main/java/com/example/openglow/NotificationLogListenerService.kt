@@ -1,15 +1,34 @@
 package com.example.openglow
 
 import android.app.Notification
-import android.content.pm.PackageManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
+import com.example.openglow.data.repository.NotificationRepository
+import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import javax.inject.Inject
 
+@AndroidEntryPoint
 class NotificationLogListenerService : NotificationListenerService() {
+
+    @Inject
+    lateinit var repository: NotificationRepository
+
+    private val serviceJob = SupervisorJob()
+    private val serviceScope = CoroutineScope(Dispatchers.IO + serviceJob)
+
+    override fun onDestroy() {
+        super.onDestroy()
+        serviceJob.cancel()
+    }
+
     override fun onListenerConnected() {
         super.onListenerConnected()
         Log.i(TAG, "알림 접근 서비스가 연결되었습니다. 대상 패키지: ${NotificationTargetPackages.targetPackages}")
@@ -24,6 +43,16 @@ class NotificationLogListenerService : NotificationListenerService() {
 
         val receivedNotification = buildReceivedNotification(sbn)
         logNotification(receivedNotification)
+
+        // Repository로 알림 전달 및 DB 저장 요청
+        serviceScope.launch {
+            try {
+                repository.handleNewNotification(receivedNotification)
+                Log.d(TAG, "알림이 성공적으로 Repository에 전달되었습니다.")
+            } catch (e: Exception) {
+                Log.e(TAG, "알림 전달 중 오류 발생: ${e.message}")
+            }
+        }
     }
 
     private fun buildReceivedNotification(sbn: StatusBarNotification): ReceivedNotification {
@@ -85,7 +114,7 @@ class NotificationLogListenerService : NotificationListenerService() {
             """.trimIndent(),
         )
 
-        Log.i(TAG, "pretty json:\n${notification.toJsonObject().toString(2)}")
+        // Log.i(TAG, "pretty json:\n${notification.toJsonObject().toString(2)}")
     }
 
     private fun findAppName(packageName: String): String {

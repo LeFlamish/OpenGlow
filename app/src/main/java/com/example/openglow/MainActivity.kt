@@ -26,10 +26,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.openglow.ui.theme.OpenGlowTheme
+import dagger.hilt.android.AndroidEntryPoint
 
+enum class Screen {
+    MAIN, DB_TEST
+}
+
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     private var isNotificationAccessEnabled by mutableStateOf(false)
     private var openedNotificationSettingsOnLaunch = false
+    private var currentScreen by mutableStateOf(Screen.MAIN)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -38,10 +45,18 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             OpenGlowTheme {
-                NotificationPermissionScreen(
-                    isNotificationAccessEnabled = isNotificationAccessEnabled,
-                    onOpenSettingsClick = ::openNotificationAccessSettings,
-                )
+                when (currentScreen) {
+                    Screen.MAIN -> {
+                        NotificationPermissionScreen(
+                            isNotificationAccessEnabled = isNotificationAccessEnabled,
+                            onOpenSettingsClick = ::openNotificationAccessSettings,
+                            onGoToDbTestClick = { currentScreen = Screen.DB_TEST }
+                        )
+                    }
+                    Screen.DB_TEST -> {
+                        DatabaseTestScreen(onBackClick = { currentScreen = Screen.MAIN })
+                    }
+                }
             }
         }
 
@@ -85,6 +100,7 @@ class MainActivity : ComponentActivity() {
 private fun NotificationPermissionScreen(
     isNotificationAccessEnabled: Boolean,
     onOpenSettingsClick: () -> Unit,
+    onGoToDbTestClick: () -> Unit,
 ) {
     Surface(
         modifier = Modifier.fillMaxSize(),
@@ -119,11 +135,20 @@ private fun NotificationPermissionScreen(
                 style = MaterialTheme.typography.bodyMedium,
             )
             Spacer(modifier = Modifier.height(22.dp))
-            Button(
-                modifier = Modifier.fillMaxWidth(),
-                onClick = onOpenSettingsClick,
-            ) {
-                Text(text = "알림 접근 권한 설정하기")
+            if (isNotificationAccessEnabled) {
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onGoToDbTestClick,
+                ) {
+                    Text(text = "DB 저장 확인하기")
+                }
+            } else {
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onOpenSettingsClick,
+                ) {
+                    Text(text = "알림 접근 권한 설정하기")
+                }
             }
         }
     }
