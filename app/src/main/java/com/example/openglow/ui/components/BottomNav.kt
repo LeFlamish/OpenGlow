@@ -1,0 +1,61 @@
+package com.example.openglow.ui.components
+
+import androidx.compose.foundation.layout.size
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.openglow.ui.theme.PointBlue
+
+data class BottomNavItem(val label: String, val icon: ImageVector)
+
+@Composable
+fun BottomNavigationBar(
+    selectedIndex: Int,
+    onTabSelected: (Int) -> Unit
+) {
+    val navItems = listOf(
+        BottomNavItem("노트", Icons.Default.Description),
+        BottomNavItem("캘린더", Icons.Default.CalendarToday),
+        BottomNavItem("홈", Icons.Default.Home),
+        BottomNavItem("RAG", Icons.Default.AutoAwesome),
+        BottomNavItem("설정", Icons.Default.Settings)
+    )
+
+    NavigationBar(
+        containerColor = Color.White,
+        tonalElevation = 8.dp
+    ) {
+        navItems.forEachIndexed { index, item ->
+            val isSelected = selectedIndex == index
+            NavigationBarItem(
+                selected = isSelected,
+                onClick = { onTabSelected(index) },
+                icon = {
+                    val iconSize = if (item.label == "홈" || item.label == "RAG") 28.dp else 24.dp
+                    Icon(item.icon, contentDescription = item.label, modifier = Modifier.size(iconSize))
+                },
+                label = {
+                    Text(
+                        text = item.label,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        fontSize = 11.sp
+                    )
+                },
+                colors = NavigationBarItemDefaults.colors(
+                    selectedIconColor = PointBlue,
+                    selectedTextColor = PointBlue,
+                    unselectedIconColor = Color.Gray,
+                    unselectedTextColor = Color.Gray,
+                    indicatorColor = PointBlue.copy(alpha = 0.1f)
+                )
+            )
+        }
+    }
+}
