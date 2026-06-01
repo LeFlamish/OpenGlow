@@ -1,241 +1,525 @@
-package com.example.openglow.ui.screens // ⚠️ 패키지명 확인
+package com.example.openglow.ui.screens
 
-import android.content.Context
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.outlined.StarOutline
-import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
-import androidx.compose.runtime.*
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
+import androidx.compose.material3.AssistChipDefaults
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.openglow.ui.components.*
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.openglow.ui.theme.BackgroundGray
+import com.example.openglow.ui.theme.CardWhite
 import com.example.openglow.ui.theme.PointBlue
-import java.time.LocalDateTime
+import com.example.openglow.ui.theme.SoftGray
+import com.example.openglow.ui.theme.UrgentRed
 
 @Composable
-fun NoteScreen() {
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedTab by remember { mutableStateOf(NoteType.PERSON) }
-    var contactList by remember { mutableStateOf(emptyList<ContactEntity>()) }
+fun NoteScreen(
+    viewModel: NoteViewModel = hiltViewModel(),
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var selectedNote by remember { mutableStateOf<NoteUiModel?>(null) }
+    var feedbackNote by remember { mutableStateOf<NoteUiModel?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
-    var viewingContactId by remember { mutableStateOf<String?>(null) }
-
-    var showAddContactDialog by remember { mutableStateOf(false) }
-    var showAddNoteDialog by remember { mutableStateOf(false) }
-    var showEditContactDialog by remember { mutableStateOf(false) }
-
-    // 🌟 상세 대화 내역 수정 팝업 제어용 상태 추가
-    var selectedNoteForEdit by remember { mutableStateOf<ConversationNote?>(null) }
-
-    val context = LocalContext.current
-    val sharedPrefs = remember { context.getSharedPreferences("openglow_storage", Context.MODE_PRIVATE) }
-
-    LaunchedEffect(Unit) {
-        val savedData = sharedPrefs.getString("contacts_directory_data", "") ?: ""
-        if (savedData.isNotBlank()) {
-            try {
-                contactList = savedData.split("&&").map { contactStr ->
-                    val cParts = contactStr.split("||")
-                    val notesStr = if (cParts.size > 5) cParts[5] else ""
-                    val notes = if (notesStr.isNotBlank()) {
-                        notesStr.split("@@").map { nStr ->
-                            val nParts = nStr.split("~~")
-                            ConversationNote(nParts[0], nParts[1], LocalDateTime.parse(nParts[2]))
-                        }
-                    } else emptyList()
-                    ContactEntity(cParts[0], cParts[1], NoteType.valueOf(cParts[2]), cParts[3].toBoolean(), notes, LocalDateTime.parse(cParts[4]))
-                }
-            } catch (e: Exception) {
-                sharedPrefs.edit().remove("contacts_directory_data").apply()
-            }
+    LaunchedEffect(uiState.feedbackMessage) {
+        uiState.feedbackMessage?.let {
+            snackbarHostState.showSnackbar(it)
+            viewModel.clearFeedbackMessage()
         }
     }
 
-    LaunchedEffect(contactList) {
-        if (contactList.isNotEmpty()) {
-            val encoded = contactList.joinToString("&&") { c ->
-                val notesStr = c.notes.joinToString("@@") { n -> "${n.id}~~${n.summary}~~${n.createdAt}" }
-                "${c.id}||${c.name}||${c.type.name}||${c.isFavorite}||${c.updatedAt}||$notesStr"
+    Scaffold(
+        snackbarHost = { SnackbarHost(snackbarHostState) },
+        containerColor = BackgroundGray,
+    ) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(BackgroundGray)
+                .padding(padding)
+                .padding(16.dp),
+        ) {
+            OutlinedTextField(
+                value = uiState.query,
+                onValueChange = viewModel::updateQuery,
+                modifier = Modifier.fillMaxWidth(),
+                singleLine = true,
+                label = { Text("노트 검색") },
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ScopeFilterRow(
+                selectedFilter = uiState.selectedFilter,
+                onFilterSelected = viewModel::selectFilter,
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            ImportanceFilterRow(
+                selectedFilter = uiState.selectedImportance,
+                onFilterSelected = viewModel::selectImportance,
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("업무 관련만 보기", color = Color.DarkGray, fontSize = 14.sp)
+                Switch(checked = uiState.workOnly, onCheckedChange = viewModel::setWorkOnly)
             }
-            sharedPrefs.edit().putString("contacts_directory_data", encoded).apply()
-        } else {
-            sharedPrefs.edit().remove("contacts_directory_data").apply()
-        }
-    }
 
-    Box(modifier = Modifier.fillMaxSize().background(BackgroundGray)) {
+            Spacer(modifier = Modifier.height(12.dp))
 
-        if (viewingContactId == null) {
-            val displayContacts = remember(contactList, selectedTab, searchQuery) {
-                contactList
-                    .filter { it.name.contains(searchQuery, ignoreCase = true) }
-                    .filter { when (selectedTab) { NoteType.FAVORITE -> it.isFavorite; else -> it.type == selectedTab } }
-                    .sortedWith(compareByDescending<ContactEntity> { it.isFavorite }.thenByDescending { it.updatedAt })
-            }
-
-            Column(modifier = Modifier.fillMaxSize()) {
-                OutlinedTextField(
-                    value = searchQuery, onValueChange = { searchQuery = it }, modifier = Modifier.fillMaxWidth().padding(16.dp), placeholder = { Text("인물/그룹 이름 검색") },
-                    leadingIcon = { Icon(Icons.Default.Search, contentDescription = "검색") }, shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedContainerColor = Color.White, unfocusedContainerColor = Color.White, focusedBorderColor = PointBlue, unfocusedBorderColor = Color.Transparent)
-                )
-
-                TabRow(
-                    selectedTabIndex = selectedTab.ordinal, containerColor = BackgroundGray, contentColor = PointBlue,
-                    indicator = { tabPositions -> TabRowDefaults.Indicator(modifier = Modifier.tabIndicatorOffset(tabPositions[selectedTab.ordinal]), color = PointBlue, height = 3.dp) }
+            if (uiState.notes.isEmpty()) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    NoteType.entries.forEach { type ->
-                        Tab(selected = selectedTab == type, onClick = { selectedTab = type }, text = { Text(type.label, fontWeight = FontWeight.Bold, fontSize = 15.sp) }, selectedContentColor = PointBlue, unselectedContentColor = Color.Gray)
-                    }
+                    Text("아직 정리된 노트가 없습니다.", color = SoftGray)
                 }
-
-                if (displayContacts.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text(if (selectedTab == NoteType.FAVORITE) "즐겨찾기된 항목이 없습니다." else "등록된 연락처가 없습니다.", color = Color.Gray) }
-                } else {
-                    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
-                        items(displayContacts, key = { it.id }) { contact ->
-                            ContactCard(
-                                contact = contact,
-                                onClick = { viewingContactId = contact.id },
-                                onFavoriteToggle = {
-                                    contactList = contactList.map { if (it.id == contact.id) it.copy(isFavorite = !it.isFavorite, updatedAt = LocalDateTime.now()) else it }
-                                }
-                            )
-                        }
-                    }
-                }
-            }
-
-            FloatingActionButton(
-                onClick = { showAddContactDialog = true }, containerColor = PointBlue, contentColor = Color.White, shape = CircleShape, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp)
-            ) { Icon(Icons.Default.Add, contentDescription = "연락처 추가") }
-
-            if (showAddContactDialog) {
-                AddContactDialog(
-                    currentTabType = selectedTab, onDismiss = { showAddContactDialog = false },
-                    onSave = { name, type ->
-                        contactList = contactList + ContactEntity(name = name, type = type)
-                        showAddContactDialog = false
-                    }
-                )
-            }
-        } else {
-            val contact = contactList.find { it.id == viewingContactId }
-            if (contact == null) {
-                viewingContactId = null
             } else {
-                val sortedNotes = contact.notes.sortedByDescending { it.createdAt }
-
-                Column(modifier = Modifier.fillMaxSize()) {
-                    Surface(color = Color.White, shadowElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
-                        Row(modifier = Modifier.padding(16.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            IconButton(onClick = { viewingContactId = null }, modifier = Modifier.size(32.dp)) { Icon(Icons.Default.ArrowBack, contentDescription = "뒤로 가기") }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(text = contact.name, fontWeight = FontWeight.Bold, fontSize = 20.sp, modifier = Modifier.weight(1f))
-
-                            IconButton(onClick = { showEditContactDialog = true }) {
-                                Icon(Icons.Default.Edit, contentDescription = "수정", tint = Color.Gray)
-                            }
-                            IconButton(onClick = { contactList = contactList.map { if (it.id == contact.id) it.copy(isFavorite = !it.isFavorite) else it } }) {
-                                Icon(imageVector = if (contact.isFavorite) Icons.Filled.Star else Icons.Outlined.StarOutline, contentDescription = "즐겨찾기", tint = if (contact.isFavorite) Color(0xFFFFC107) else Color.LightGray)
-                            }
-                        }
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(bottom = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    items(uiState.notes, key = { it.id }) { note ->
+                        NoteCard(
+                            note = note,
+                            onClick = { selectedNote = note },
+                        )
                     }
-
-                    if (sortedNotes.isEmpty()) {
-                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("등록된 대화 내역이 없습니다.", color = Color.Gray) }
-                    } else {
-                        LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
-                            items(sortedNotes, key = { it.id }) { note ->
-                                // 🌟 대화 내역 카드에 클릭 이벤트 연동
-                                ConversationNoteCard(
-                                    note = note,
-                                    onClick = { selectedNoteForEdit = note }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                FloatingActionButton(
-                    onClick = { showAddNoteDialog = true }, containerColor = PointBlue, contentColor = Color.White, shape = CircleShape, modifier = Modifier.align(Alignment.BottomEnd).padding(end = 16.dp, bottom = 16.dp)
-                ) { Icon(Icons.Default.Add, contentDescription = "대화 내역 추가") }
-
-                if (showAddNoteDialog) {
-                    AddConversationDialog(
-                        onDismiss = { showAddNoteDialog = false },
-                        onSave = { summary ->
-                            val newNote = ConversationNote(summary = summary)
-                            contactList = contactList.map {
-                                if (it.id == contact.id) it.copy(notes = it.notes + newNote, updatedAt = LocalDateTime.now()) else it
-                            }
-                            showAddNoteDialog = false
-                        }
-                    )
-                }
-
-                if (showEditContactDialog) {
-                    EditDeleteContactDialog(
-                        contact = contact,
-                        onDismiss = { showEditContactDialog = false },
-                        onUpdate = { newName, newType ->
-                            contactList = contactList.map {
-                                if (it.id == contact.id) it.copy(name = newName, type = newType, updatedAt = LocalDateTime.now()) else it
-                            }
-                            showEditContactDialog = false
-                        },
-                        onDelete = {
-                            contactList = contactList.filter { it.id != contact.id }
-                            showEditContactDialog = false
-                            viewingContactId = null
-                        }
-                    )
-                }
-
-                // 🌟 신규 연동: 대화 내역 자체 수정/삭제 팝업창 띄우기
-                selectedNoteForEdit?.let { targetNote ->
-                    EditDeleteConversationDialog(
-                        note = targetNote,
-                        onDismiss = { selectedNoteForEdit = null },
-                        onUpdate = { newSummary ->
-                            contactList = contactList.map { c ->
-                                if (c.id == contact.id) {
-                                    val updatedNotes = c.notes.map { n ->
-                                        if (n.id == targetNote.id) n.copy(summary = newSummary) else n
-                                    }
-                                    c.copy(notes = updatedNotes, updatedAt = LocalDateTime.now()) // 폴더 업데이트 시각도 갱신!
-                                } else c
-                            }
-                            selectedNoteForEdit = null
-                        },
-                        onDelete = {
-                            contactList = contactList.map { c ->
-                                if (c.id == contact.id) {
-                                    val updatedNotes = c.notes.filter { n -> n.id != targetNote.id }
-                                    c.copy(notes = updatedNotes, updatedAt = LocalDateTime.now())
-                                } else c
-                            }
-                            selectedNoteForEdit = null
-                        }
-                    )
                 }
             }
         }
     }
+
+    selectedNote?.let { note ->
+        NoteDetailDialog(
+            note = note,
+            onDismiss = { selectedNote = null },
+            onFeedbackClick = {
+                selectedNote = null
+                feedbackNote = note
+            },
+        )
+    }
+
+    feedbackNote?.let { note ->
+        FeedbackDialog(
+            note = note,
+            onDismiss = { feedbackNote = null },
+            onSubmit = { importance, isWorkRelated, scope, comment ->
+                viewModel.submitFeedback(
+                    noteId = note.id,
+                    correctedImportance = importance,
+                    correctedIsWorkRelated = isWorkRelated,
+                    correctedSenderScope = scope,
+                    userComment = comment,
+                )
+                feedbackNote = null
+            },
+        )
+    }
+}
+
+@Composable
+private fun ScopeFilterRow(
+    selectedFilter: NoteFilter,
+    onFilterSelected: (NoteFilter) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        NoteFilter.entries.forEach { filter ->
+            FilterChip(
+                selected = selectedFilter == filter,
+                onClick = { onFilterSelected(filter) },
+                label = { Text(filter.label) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = PointBlue.copy(alpha = 0.14f),
+                    selectedLabelColor = PointBlue,
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ImportanceFilterRow(
+    selectedFilter: ImportanceFilter,
+    onFilterSelected: (ImportanceFilter) -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        ImportanceFilter.entries.forEach { filter ->
+            FilterChip(
+                selected = selectedFilter == filter,
+                onClick = { onFilterSelected(filter) },
+                label = { Text(filter.label) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = importanceColor(filter.name).copy(alpha = 0.14f),
+                    selectedLabelColor = importanceColor(filter.name),
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+private fun NoteCard(
+    note: NoteUiModel,
+    onClick: () -> Unit,
+) {
+    val importanceColor = importanceColor(note.latestImportance)
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = CardWhite),
+        elevation = CardDefaults.cardElevation(1.dp),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = note.title,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${note.senderDisplayName} · ${note.updatedAtText}",
+                        color = SoftGray,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Spacer(modifier = Modifier.width(12.dp))
+                AssistChip(
+                    onClick = {},
+                    label = { Text(scopeLabel(note.senderScope)) },
+                    colors = AssistChipDefaults.assistChipColors(
+                        containerColor = PointBlue.copy(alpha = 0.10f),
+                        labelColor = PointBlue,
+                    ),
+                    border = null,
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = note.latestOneLineSummary,
+                fontSize = 14.sp,
+                lineHeight = 20.sp,
+                color = Color.DarkGray,
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = note.finalSummary,
+                fontSize = 13.sp,
+                lineHeight = 18.sp,
+                color = Color.DarkGray,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                NoteChip(text = note.platform, color = SoftGray)
+                NoteChip(text = "중요도 ${importanceLabel(note.latestImportance)}", color = importanceColor)
+                NoteChip(
+                    text = if (note.latestIsWorkRelated) "업무 관련" else "업무 외",
+                    color = if (note.latestIsWorkRelated) PointBlue else SoftGray,
+                )
+                if (note.latestMeetingDetected) {
+                    NoteChip(text = "회의", color = PointBlue)
+                }
+                if (note.latestProjectDetected) {
+                    NoteChip(text = "프로젝트", color = PointBlue)
+                }
+                if (!note.latestDeadlineText.isNullOrBlank()) {
+                    NoteChip(text = note.latestDeadlineText, color = UrgentRed)
+                }
+                NoteChip(text = modelSourceLabel(note.modelSource), color = SoftGray)
+            }
+
+            if (note.actionItems.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    note.actionItems.take(3).forEach { item ->
+                        Text(
+                            text = "- $item",
+                            color = Color.DarkGray,
+                            fontSize = 13.sp,
+                            lineHeight = 18.sp,
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+            Text(
+                text = "알림 ${note.notificationCount}개 누적 · 신뢰도 ${(note.confidence * 100).toInt()}%",
+                color = SoftGray,
+                fontSize = 12.sp,
+            )
+        }
+    }
+}
+
+@Composable
+private fun NoteChip(text: String, color: Color) {
+    AssistChip(
+        onClick = {},
+        label = { Text(text, fontSize = 12.sp) },
+        colors = AssistChipDefaults.assistChipColors(
+            containerColor = color.copy(alpha = 0.10f),
+            labelColor = color,
+        ),
+        border = null,
+    )
+}
+
+@Composable
+private fun NoteDetailDialog(
+    note: NoteUiModel,
+    onDismiss: () -> Unit,
+    onFeedbackClick: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("닫기")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onFeedbackClick) {
+                Text("판단 수정하기")
+            }
+        },
+        title = {
+            Text(
+                text = note.title,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+        },
+        text = {
+            Surface(
+                color = MaterialTheme.colorScheme.surface,
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(440.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(4.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    Text("최종 정리본", fontWeight = FontWeight.Bold)
+                    Text(
+                        text = note.finalSummary,
+                        fontSize = 14.sp,
+                        lineHeight = 20.sp,
+                    )
+
+                    if (note.retainedFacts.isNotEmpty()) {
+                        Text("보존된 핵심 사실", fontWeight = FontWeight.Bold)
+                        note.retainedFacts.forEach {
+                            Text("- $it", fontSize = 13.sp, lineHeight = 18.sp)
+                        }
+                    }
+
+                    if (note.actionItems.isNotEmpty()) {
+                        Text("최근 할 일", fontWeight = FontWeight.Bold)
+                        note.actionItems.forEach {
+                            Text("- $it", fontSize = 13.sp, lineHeight = 18.sp)
+                        }
+                    }
+                }
+            }
+        },
+        shape = RoundedCornerShape(8.dp),
+        containerColor = Color.White,
+    )
+}
+
+@Composable
+@OptIn(ExperimentalLayoutApi::class)
+private fun FeedbackDialog(
+    note: NoteUiModel,
+    onDismiss: () -> Unit,
+    onSubmit: (String?, Boolean?, String?, String?) -> Unit,
+) {
+    var selectedImportance by remember(note.id) { mutableStateOf(note.latestImportance) }
+    var selectedWorkRelated by remember(note.id) { mutableStateOf(note.latestIsWorkRelated) }
+    var selectedScope by remember(note.id) { mutableStateOf(note.senderScope) }
+    var comment by remember(note.id) { mutableStateOf("") }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("이 판단이 맞나요?", fontWeight = FontWeight.Bold) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                Text(note.latestOneLineSummary, fontSize = 14.sp, lineHeight = 20.sp)
+
+                Text("중요도", fontWeight = FontWeight.Bold)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("LOW", "NORMAL", "HIGH", "URGENT").forEach { importance ->
+                        FilterChip(
+                            selected = selectedImportance == importance,
+                            onClick = { selectedImportance = importance },
+                            label = { Text(importanceLabel(importance)) },
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text("업무 관련")
+                    Switch(checked = selectedWorkRelated, onCheckedChange = { selectedWorkRelated = it })
+                }
+
+                Text("개인/그룹", fontWeight = FontWeight.Bold)
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("INDIVIDUAL", "GROUP", "UNKNOWN").forEach { scope ->
+                        FilterChip(
+                            selected = selectedScope == scope,
+                            onClick = { selectedScope = scope },
+                            label = { Text(scopeLabel(scope)) },
+                        )
+                    }
+                }
+
+                OutlinedTextField(
+                    value = comment,
+                    onValueChange = { comment = it },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 2,
+                    label = { Text("간단 코멘트") },
+                )
+            }
+        },
+        confirmButton = {
+            Button(
+                onClick = {
+                    onSubmit(
+                        selectedImportance,
+                        selectedWorkRelated,
+                        selectedScope,
+                        comment,
+                    )
+                },
+            ) {
+                Text("저장")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("취소")
+            }
+        },
+        shape = RoundedCornerShape(8.dp),
+        containerColor = Color.White,
+    )
+}
+
+private fun scopeLabel(scope: String): String = when (scope) {
+    "GROUP" -> "그룹"
+    "UNKNOWN" -> "불확실"
+    else -> "개인"
+}
+
+private fun modelSourceLabel(source: String): String = when (source) {
+    "GEMINI" -> "Gemini"
+    "LOCAL_LLM" -> "Local"
+    else -> "Rule"
+}
+
+private fun importanceLabel(importance: String): String = when (importance) {
+    "LOW" -> "낮음"
+    "HIGH" -> "높음"
+    "URGENT" -> "긴급"
+    else -> "보통"
+}
+
+private fun importanceColor(importance: String): Color = when (importance) {
+    "LOW" -> SoftGray
+    "HIGH" -> Color(0xFFF59E0B)
+    "URGENT" -> UrgentRed
+    else -> PointBlue
 }

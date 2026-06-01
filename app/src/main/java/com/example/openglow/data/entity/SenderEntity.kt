@@ -5,7 +5,8 @@ import androidx.room.PrimaryKey
 
 enum class SenderType {
     INDIVIDUAL,
-    GROUP
+    GROUP,
+    UNKNOWN,
 }
 
 @Entity(tableName = "senders")

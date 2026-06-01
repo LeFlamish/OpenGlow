@@ -1,9 +1,20 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
 }
+
+val localProperties = Properties().apply {
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use(::load)
+    }
+}
+
+fun String.asBuildConfigString(): String = replace("\\", "\\\\").replace("\"", "\\\"")
 
 android {
     namespace = "com.example.openglow"
@@ -17,6 +28,25 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        val geminiApiKey = localProperties.getProperty("GEMINI_API_KEY")
+            ?: project.findProperty("GEMINI_API_KEY") as? String
+            ?: ""
+        val geminiModel = localProperties.getProperty("GEMINI_MODEL")
+            ?: project.findProperty("GEMINI_MODEL") as? String
+            ?: "gemini-3.5-flash"
+        val localLlmModelPath = localProperties.getProperty("LOCAL_LLM_MODEL_PATH")
+            ?: project.findProperty("LOCAL_LLM_MODEL_PATH") as? String
+            ?: ""
+        val enableLocalLlm = localProperties.getProperty("ENABLE_LOCAL_LLM")
+            ?: project.findProperty("ENABLE_LOCAL_LLM") as? String
+            ?: "false"
+
+        // Prototype only: route Gemini calls through a backend before release.
+        buildConfigField("String", "GEMINI_API_KEY", "\"${geminiApiKey.asBuildConfigString()}\"")
+        buildConfigField("String", "GEMINI_MODEL", "\"${geminiModel.asBuildConfigString()}\"")
+        buildConfigField("String", "LOCAL_LLM_MODEL_PATH", "\"${localLlmModelPath.asBuildConfigString()}\"")
+        buildConfigField("Boolean", "ENABLE_LOCAL_LLM", enableLocalLlm.toBooleanStrictOrNull()?.toString() ?: "false")
     }
 
     buildTypes {
@@ -38,6 +68,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = libs.versions.composeCompiler.get()
@@ -52,6 +83,10 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     ksp(libs.androidx.room.compiler)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.converter.gson)
+    implementation(libs.okhttp.logging.interceptor)
+    implementation(libs.androidx.work.runtime.ktx)
     implementation("androidx.compose.material:material-icons-extended:1.6.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     implementation(platform(libs.androidx.compose.bom))

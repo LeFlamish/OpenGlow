@@ -20,6 +20,13 @@ data class ReceivedNotification(
     val infoText: String?,
     val category: String?,
     val extras: Map<String, Any?>,
+    val extractedFullText: String,
+    val textFragments: List<String>,
+    val extractionSourceTypes: List<String>,
+    val completenessConfidence: Float,
+    val isLikelyComplete: Boolean,
+    val groupHint: Boolean?,
+    val extractionDebugInfo: String,
 ) {
     fun toJsonObject(): JSONObject = JSONObject().apply {
         put("packageName", packageName)
@@ -36,5 +43,12 @@ data class ReceivedNotification(
         put("infoText", infoText)
         put("category", category)
         put("extras", NotificationValueFormatter.toJsonObject(extras))
+        put("extractedFullText", extractedFullText)
+        put("textFragments", textFragments)
+        put("extractionSourceTypes", extractionSourceTypes)
+        put("completenessConfidence", completenessConfidence)
+        put("isLikelyComplete", isLikelyComplete)
+        put("groupHint", groupHint)
+        put("extractionDebugInfo", extractionDebugInfo)
     }
 }

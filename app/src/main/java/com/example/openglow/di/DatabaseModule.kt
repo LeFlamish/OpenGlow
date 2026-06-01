@@ -4,7 +4,11 @@ import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.openglow.data.local.AppDatabase
+import com.example.openglow.data.local.dao.AnalysisLogDao
+import com.example.openglow.data.local.dao.FeedbackDao
 import com.example.openglow.data.local.dao.NotificationDao
+import com.example.openglow.data.local.dao.NoteDao
+import com.example.openglow.data.local.dao.PersonalizationRuleDao
 import com.example.openglow.data.local.dao.SenderDao
 import com.example.openglow.data.local.dao.SummaryDao
 import dagger.Module
@@ -44,5 +48,25 @@ object DatabaseModule {
     @Provides
     fun provideSummaryDao(database: AppDatabase): SummaryDao {
         return database.summaryDao()
+    }
+
+    @Provides
+    fun provideNoteDao(database: AppDatabase): NoteDao {
+        return database.noteDao()
+    }
+
+    @Provides
+    fun provideAnalysisLogDao(database: AppDatabase): AnalysisLogDao {
+        return database.analysisLogDao()
+    }
+
+    @Provides
+    fun provideFeedbackDao(database: AppDatabase): FeedbackDao {
+        return database.feedbackDao()
+    }
+
+    @Provides
+    fun providePersonalizationRuleDao(database: AppDatabase): PersonalizationRuleDao {
+        return database.personalizationRuleDao()
     }
 }

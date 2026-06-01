@@ -11,9 +11,13 @@ import com.example.openglow.data.local.dao.*
         SenderEntity::class,
         SenderIdentifierEntity::class,
         NotificationEntity::class,
-        SummaryEntity::class
+        SummaryEntity::class,
+        NoteEntity::class,
+        AnalysisLogEntity::class,
+        FeedbackEntity::class,
+        PersonalizationRuleEntity::class,
     ],
-    version = 1,
+    version = 4,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -21,4 +25,8 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun senderDao(): SenderDao
     abstract fun notificationDao(): NotificationDao
     abstract fun summaryDao(): SummaryDao
+    abstract fun noteDao(): NoteDao
+    abstract fun analysisLogDao(): AnalysisLogDao
+    abstract fun feedbackDao(): FeedbackDao
+    abstract fun personalizationRuleDao(): PersonalizationRuleDao
 }

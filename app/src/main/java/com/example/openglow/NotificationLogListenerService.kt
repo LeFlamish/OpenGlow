@@ -5,15 +5,16 @@ import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import android.util.Log
 import com.example.openglow.data.repository.NotificationRepository
+import com.example.openglow.notification.NotificationTextExtractor
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 @AndroidEntryPoint
 class NotificationLogListenerService : NotificationListenerService() {
@@ -31,7 +32,7 @@ class NotificationLogListenerService : NotificationListenerService() {
 
     override fun onListenerConnected() {
         super.onListenerConnected()
-        Log.i(TAG, "알림 접근 서비스가 연결되었습니다. 대상 패키지: ${NotificationTargetPackages.targetPackages}")
+        Log.i(TAG, "Notification listener connected. targets=${NotificationTargetPackages.targetPackages}")
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -44,13 +45,12 @@ class NotificationLogListenerService : NotificationListenerService() {
         val receivedNotification = buildReceivedNotification(sbn)
         logNotification(receivedNotification)
 
-        // Repository로 알림 전달 및 DB 저장 요청
         serviceScope.launch {
             try {
                 repository.handleNewNotification(receivedNotification)
-                Log.d(TAG, "알림이 성공적으로 Repository에 전달되었습니다.")
+                Log.d(TAG, "Notification passed to repository")
             } catch (e: Exception) {
-                Log.e(TAG, "알림 전달 중 오류 발생: ${e.message}")
+                Log.e(TAG, "Failed to handle notification: ${e.message}")
             }
         }
     }
@@ -59,6 +59,7 @@ class NotificationLogListenerService : NotificationListenerService() {
         val notification = sbn.notification
         val extras = notification.extras
         val extrasMap = NotificationValueFormatter.bundleToMap(extras)
+        val extracted = NotificationTextExtractor.extract(sbn)
 
         return ReceivedNotification(
             packageName = sbn.packageName,
@@ -66,55 +67,44 @@ class NotificationLogListenerService : NotificationListenerService() {
             notificationKey = sbn.key.orEmpty(),
             postTime = sbn.postTime,
             postTimeText = DATE_FORMAT.format(Date(sbn.postTime)),
-            title = extras.getTextOrNull(Notification.EXTRA_TITLE),
+            title = extracted.title ?: extras.getTextOrNull(Notification.EXTRA_TITLE),
             text = extras.getTextOrNull(Notification.EXTRA_TEXT),
             subText = extras.getTextOrNull(Notification.EXTRA_SUB_TEXT),
             bigText = extras.getTextOrNull(Notification.EXTRA_BIG_TEXT),
             summaryText = extras.getTextOrNull(Notification.EXTRA_SUMMARY_TEXT),
-            conversationTitle = extras.getTextOrNull("android.conversationTitle"),
+            conversationTitle = extracted.conversationTitle ?: extras.getTextOrNull("android.conversationTitle"),
             infoText = extras.getTextOrNull(Notification.EXTRA_INFO_TEXT),
             category = notification.category,
             extras = extrasMap,
+            extractedFullText = extracted.fullText,
+            textFragments = extracted.fragments,
+            extractionSourceTypes = extracted.sourceTypes,
+            completenessConfidence = extracted.completenessConfidence,
+            isLikelyComplete = extracted.isLikelyComplete,
+            groupHint = extracted.groupHint,
+            extractionDebugInfo = extracted.debugInfo,
         )
     }
 
     private fun logNotification(notification: ReceivedNotification) {
-        val importantExtras = REQUESTED_EXTRA_KEYS.joinToString(separator = "\n") { key ->
-            "$key = ${NotificationValueFormatter.toReadableString(notification.extras[key])}"
-        }
-
-        val allExtras = notification.extras.entries.joinToString(separator = "\n") { (key, value) ->
-            "$key = ${NotificationValueFormatter.toReadableString(value)}"
-        }
-
         Log.i(
             TAG,
             """
-            ================ 알림 수신 ================
+            ================ Notification received ================
             packageName: ${notification.packageName}
             appName: ${notification.appName}
             notificationKey: ${notification.notificationKey}
             postTime: ${notification.postTimeText} (${notification.postTime})
             category: ${notification.category}
-
-            title: ${notification.title}
-            text: ${notification.text}
-            subText: ${notification.subText}
-            bigText: ${notification.bigText}
-            summaryText: ${notification.summaryText}
-            conversationTitle: ${notification.conversationTitle}
-            infoText: ${notification.infoText}
-
-            주요 extras:
-            $importantExtras
-
-            전체 extras:
-            $allExtras
+            sourceTypes: ${notification.extractionSourceTypes}
+            textLength: ${notification.extractedFullText.length}
+            completenessConfidence: ${notification.completenessConfidence}
+            isLikelyComplete: ${notification.isLikelyComplete}
+            groupHint: ${notification.groupHint}
+            debugInfo: ${notification.extractionDebugInfo}
             ==========================================
             """.trimIndent(),
         )
-
-        // Log.i(TAG, "pretty json:\n${notification.toJsonObject().toString(2)}")
     }
 
     private fun findAppName(packageName: String): String {
@@ -130,21 +120,6 @@ class NotificationLogListenerService : NotificationListenerService() {
 
     companion object {
         private const val TAG = "NotificationListener"
-
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA)
-
-        private val REQUESTED_EXTRA_KEYS = listOf(
-            "android.title",
-            "android.text",
-            "android.subText",
-            "android.bigText",
-            "android.summaryText",
-            "android.infoText",
-            "android.conversationTitle",
-            "android.messages",
-            "android.template",
-            "android.people",
-            "android.picture",
-        )
     }
 }

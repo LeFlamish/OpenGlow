@@ -47,6 +47,9 @@ interface SenderDao {
     @Query("SELECT * FROM senders ORDER BY lastNotifiedAt DESC")
     fun getAllSendersFlow(): Flow<List<SenderEntity>>
 
+    @Query("SELECT * FROM senders WHERE id = :senderId LIMIT 1")
+    suspend fun getSenderById(senderId: Long): SenderEntity?
+
     // ⚡ [가벼운 쿼리] 새 알림 수신 시: 백그라운드에서 식별자 ID만 빠르게 찾을 때 사용
     // 3가지 조건(value, platform, type)을 모두 사용해 유니크 인덱스를 100% 활용
     @Query("""
@@ -75,7 +78,7 @@ interface SenderDao {
     suspend fun findSenderWithIdentifier(
         value: String,
         platform: String,
-        type: String
+        type: IdentifierType
     ): SenderWithIdentifier?
 
     @Update
