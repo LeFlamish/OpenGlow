@@ -41,12 +41,22 @@ android {
         val enableLocalLlm = localProperties.getProperty("ENABLE_LOCAL_LLM")
             ?: project.findProperty("ENABLE_LOCAL_LLM") as? String
             ?: "false"
+        val localLlmBackend = localProperties.getProperty("LOCAL_LLM_BACKEND")
+            ?: project.findProperty("LOCAL_LLM_BACKEND") as? String
+            ?: "litertlm"
+        val modelRegistryBaseUrl = localProperties.getProperty("MODEL_REGISTRY_BASE_URL")
+            ?: project.findProperty("MODEL_REGISTRY_BASE_URL") as? String
+            ?: ""
 
         // Prototype only: route Gemini calls through a backend before release.
         buildConfigField("String", "GEMINI_API_KEY", "\"${geminiApiKey.asBuildConfigString()}\"")
         buildConfigField("String", "GEMINI_MODEL", "\"${geminiModel.asBuildConfigString()}\"")
         buildConfigField("String", "LOCAL_LLM_MODEL_PATH", "\"${localLlmModelPath.asBuildConfigString()}\"")
+        buildConfigField("String", "DEBUG_LOCAL_LLM_MODEL_PATH", "\"${localLlmModelPath.asBuildConfigString()}\"")
         buildConfigField("Boolean", "ENABLE_LOCAL_LLM", enableLocalLlm.toBooleanStrictOrNull()?.toString() ?: "false")
+        buildConfigField("Boolean", "LOCAL_LLM_ENABLED", enableLocalLlm.toBooleanStrictOrNull()?.toString() ?: "false")
+        buildConfigField("String", "LOCAL_LLM_BACKEND", "\"${localLlmBackend.asBuildConfigString()}\"")
+        buildConfigField("String", "MODEL_REGISTRY_BASE_URL", "\"${modelRegistryBaseUrl.asBuildConfigString()}\"")
     }
 
     buildTypes {
@@ -87,6 +97,7 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.onnxruntime.android)
     implementation("androidx.compose.material:material-icons-extended:1.6.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     implementation(platform(libs.androidx.compose.bom))

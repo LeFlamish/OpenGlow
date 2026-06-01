@@ -5,6 +5,7 @@ import androidx.room.withTransaction
 import com.example.openglow.NotificationTargetPackages
 import com.example.openglow.ReceivedNotification
 import com.example.openglow.data.entity.AnalysisLogEntity
+import com.example.openglow.data.entity.CalendarSuggestionEntity
 import com.example.openglow.data.entity.IdentifierType
 import com.example.openglow.data.entity.NoteEntity
 import com.example.openglow.data.entity.NotificationEntity
@@ -14,15 +15,20 @@ import com.example.openglow.data.entity.SenderType
 import com.example.openglow.data.entity.SummaryEntity
 import com.example.openglow.data.local.AppDatabase
 import com.example.openglow.data.local.dao.AnalysisLogDao
+import com.example.openglow.data.local.dao.CalendarSuggestionDao
 import com.example.openglow.data.local.dao.NoteDao
 import com.example.openglow.data.local.dao.NotificationDao
 import com.example.openglow.data.local.dao.SenderDao
 import com.example.openglow.data.local.dao.SummaryDao
+import com.example.openglow.domain.classifier.ClassifierRouter
+import com.example.openglow.domain.llm.FinalSummarySanitizer
+import com.example.openglow.domain.llm.ImportanceLevel
+import com.example.openglow.domain.llm.LlmRouter
 import com.example.openglow.domain.llm.NoteUpdateInput
 import com.example.openglow.domain.llm.NotificationAnalysisResult
 import com.example.openglow.domain.llm.SenderScope
-import com.example.openglow.domain.llm.LlmRouter
 import com.example.openglow.domain.personalization.PersonalizationEngine
+import com.example.openglow.notification.NotificationNoiseFilter
 import java.security.MessageDigest
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -39,7 +45,9 @@ class NotificationRepositoryImpl @Inject constructor(
     private val summaryDao: SummaryDao,
     private val noteDao: NoteDao,
     private val analysisLogDao: AnalysisLogDao,
+    private val calendarSuggestionDao: CalendarSuggestionDao,
     private val llmRouter: LlmRouter,
+    private val classifierRouter: ClassifierRouter,
     private val personalizationEngine: PersonalizationEngine,
 ) : NotificationRepository {
 
@@ -51,6 +59,11 @@ class NotificationRepositoryImpl @Inject constructor(
     ) = withContext(Dispatchers.IO) {
         if (notification.packageName !in NotificationTargetPackages.targetPackages) {
             Log.w(TAG, "Skipping non-target package defensively: ${notification.packageName}")
+            return@withContext
+        }
+
+        if (NotificationNoiseFilter.shouldSkip(notification)) {
+            Log.i(TAG, "Skipping unread/count notification: package=${notification.packageName}")
             return@withContext
         }
 
@@ -162,11 +175,9 @@ class NotificationRepositoryImpl @Inject constructor(
 
     override suspend fun generateSummaryIfNeeded(senderId: Long): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
-            val sender = senderDao.getSenderById(senderId)
-                ?: return@runCatching
+            val sender = senderDao.getSenderById(senderId) ?: return@runCatching
             val unsummarized = notificationDao.getUnsummarizedNotificationsBySender(senderId)
-            val latest = unsummarized.lastOrNull()
-                ?: return@runCatching
+            val latest = unsummarized.lastOrNull() ?: return@runCatching
 
             analyzeAndPersist(
                 notificationId = latest.id,
@@ -202,6 +213,7 @@ class NotificationRepositoryImpl @Inject constructor(
         analysisMutex.withLock {
             val previousNote = noteDao.getNoteBySenderId(senderId)
             val personalizationRules = personalizationEngine.loadRules()
+            val classificationHint = classifierRouter.classify(fullText)
             val input = NoteUpdateInput(
                 platform = platform,
                 packageName = packageName,
@@ -213,11 +225,12 @@ class NotificationRepositoryImpl @Inject constructor(
                 newNotificationText = fullText,
                 textFragments = textFragments,
                 completenessConfidence = completenessConfidence,
+                classificationHint = classificationHint,
                 timestamp = timestamp,
                 userPersonalizationRules = personalizationRules,
             )
 
-            val analysis = llmRouter.analyzeAndUpdateNote(input)
+            val analysis = llmRouter.analyzeAndUpdateNote(input).sanitize()
             val now = System.currentTimeMillis()
 
             db.withTransaction {
@@ -244,7 +257,7 @@ class NotificationRepositoryImpl @Inject constructor(
                     ),
                 )
 
-                analysisLogDao.insertAnalysisLog(
+                val analysisLogId = analysisLogDao.insertAnalysisLog(
                     AnalysisLogEntity(
                         notificationId = notificationId,
                         noteId = noteId,
@@ -257,12 +270,26 @@ class NotificationRepositoryImpl @Inject constructor(
                         meetingDetected = analysis.meetingDetected,
                         projectDetected = analysis.projectDetected,
                         senderScope = analysis.senderScope.name,
-                        modelSource = analysis.modelSource.name,
-                        confidence = analysis.confidence,
+                        modelSource = "${analysis.modelSource.name}/${classificationHint.modelName}",
+                        confidence = minOf(analysis.confidence, classificationHint.confidence),
                         createdAt = now,
                         feedbackRequested = analysis.shouldAskFeedback,
                     ),
                 )
+
+                if (analysis.isCalendarCandidate()) {
+                    calendarSuggestionDao.insertSuggestion(
+                        CalendarSuggestionEntity(
+                            noteId = noteId,
+                            analysisLogId = analysisLogId,
+                            title = analysis.noteTitle.ifBlank { senderDisplayName },
+                            description = analysis.oneLineSummary,
+                            deadlineText = analysis.deadlineText,
+                            sourceSummary = analysis.updatedFinalSummary.take(240),
+                            createdAt = now,
+                        ),
+                    )
+                }
 
                 notificationDao.markAsSummarized(notificationIdsToMark)
             }
@@ -270,7 +297,7 @@ class NotificationRepositoryImpl @Inject constructor(
             Log.i(
                 TAG,
                 "Analysis saved: senderId=$senderId, model=${analysis.modelSource}, " +
-                    "importance=${analysis.importance}, work=${analysis.isWorkRelated}",
+                    "classifier=${classificationHint.modelName}, importance=${analysis.importance}, work=${analysis.isWorkRelated}",
             )
         }
     }
@@ -285,9 +312,11 @@ class NotificationRepositoryImpl @Inject constructor(
     ): Long {
         val retainedFactsJson = JSONArray(analysis.retainedFacts).toString()
         val actionItemsJson = JSONArray(analysis.actionItems).toString()
-        val existing = previous
+        val aggregateImportance = aggregateImportance(previous?.aggregateImportance, analysis)
+        val aggregateIsWorkRelated = aggregateWorkRelated(previous, analysis)
+        val calendarCandidate = analysis.isCalendarCandidate()
 
-        if (existing == null) {
+        if (previous == null) {
             return noteDao.insertNote(
                 NoteEntity(
                     senderId = senderId,
@@ -302,8 +331,11 @@ class NotificationRepositoryImpl @Inject constructor(
                     latestIsWorkRelated = analysis.isWorkRelated,
                     latestMeetingDetected = analysis.meetingDetected,
                     latestProjectDetected = analysis.projectDetected,
+                    aggregateImportance = aggregateImportance,
+                    aggregateIsWorkRelated = aggregateIsWorkRelated,
                     latestActionItemsJson = actionItemsJson,
                     latestDeadlineText = analysis.deadlineText,
+                    calendarCandidate = calendarCandidate,
                     notificationCount = 1,
                     modelSource = analysis.modelSource.name,
                     confidence = analysis.confidence,
@@ -314,11 +346,11 @@ class NotificationRepositoryImpl @Inject constructor(
         }
 
         noteDao.updateNote(
-            existing.copy(
+            previous.copy(
                 platform = platform,
                 senderDisplayName = senderDisplayName,
                 senderScope = analysis.senderScope.name,
-                title = analysis.noteTitle.ifBlank { existing.title },
+                title = analysis.noteTitle.ifBlank { previous.title },
                 finalSummary = analysis.updatedFinalSummary,
                 retainedFactsJson = retainedFactsJson,
                 latestOneLineSummary = analysis.oneLineSummary,
@@ -326,15 +358,18 @@ class NotificationRepositoryImpl @Inject constructor(
                 latestIsWorkRelated = analysis.isWorkRelated,
                 latestMeetingDetected = analysis.meetingDetected,
                 latestProjectDetected = analysis.projectDetected,
+                aggregateImportance = aggregateImportance,
+                aggregateIsWorkRelated = aggregateIsWorkRelated,
                 latestActionItemsJson = actionItemsJson,
                 latestDeadlineText = analysis.deadlineText,
-                notificationCount = existing.notificationCount + 1,
+                calendarCandidate = calendarCandidate,
+                notificationCount = previous.notificationCount + 1,
                 modelSource = analysis.modelSource.name,
                 confidence = analysis.confidence,
                 updatedAt = now,
             ),
         )
-        return existing.id
+        return previous.id
     }
 
     override fun getAllSendersStream(): Flow<List<SenderEntity>> = senderDao.getAllSendersFlow()
@@ -382,7 +417,11 @@ class NotificationRepositoryImpl @Inject constructor(
         }
 
         val messageSenders = notification.textFragments
-            .mapNotNull { fragment -> fragment.substringBefore(":", missingDelimiterValue = "").trim().takeIf { it.isNotBlank() } }
+            .mapNotNull { fragment ->
+                fragment.substringBefore(":", missingDelimiterValue = "")
+                    .trim()
+                    .takeIf { it.isNotBlank() }
+            }
             .distinct()
         if (messageSenders.size > 1) return SenderScope.GROUP
 
@@ -454,6 +493,50 @@ class NotificationRepositoryImpl @Inject constructor(
         SenderType.UNKNOWN -> SenderScope.UNKNOWN
     }
 
+    private fun NotificationAnalysisResult.sanitize(): NotificationAnalysisResult {
+        return copy(updatedFinalSummary = FinalSummarySanitizer.sanitize(updatedFinalSummary))
+    }
+
+    private fun NotificationAnalysisResult.isCalendarCandidate(): Boolean {
+        return !deadlineText.isNullOrBlank() ||
+            meetingDetected ||
+            importance == ImportanceLevel.URGENT ||
+            actionItems.any { item ->
+                CALENDAR_KEYWORDS.any { keyword -> item.contains(keyword, ignoreCase = true) }
+            }
+    }
+
+    private fun aggregateImportance(
+        previousAggregate: String?,
+        analysis: NotificationAnalysisResult,
+    ): String {
+        val previous = previousAggregate?.let { runCatching { ImportanceLevel.valueOf(it) }.getOrNull() }
+        val current = analysis.importance
+        val hasImportantMemory = analysis.retainedFacts.any { fact ->
+            WORK_MEMORY_KEYWORDS.any { keyword -> fact.contains(keyword, ignoreCase = true) }
+        }
+
+        return when {
+            previous == null -> current
+            current.ordinal >= previous.ordinal -> current
+            previous.ordinal >= ImportanceLevel.HIGH.ordinal && hasImportantMemory -> previous
+            previous == ImportanceLevel.URGENT && current == ImportanceLevel.LOW -> ImportanceLevel.HIGH
+            else -> current
+        }.name
+    }
+
+    private fun aggregateWorkRelated(
+        existing: NoteEntity?,
+        analysis: NotificationAnalysisResult,
+    ): Boolean {
+        val retainedWorkFacts = analysis.retainedFacts.any { fact ->
+            WORK_MEMORY_KEYWORDS.any { keyword -> fact.contains(keyword, ignoreCase = true) }
+        }
+        return analysis.isWorkRelated ||
+            retainedWorkFacts ||
+            (existing?.aggregateIsWorkRelated == true && existing.aggregateImportance in setOf("HIGH", "URGENT"))
+    }
+
     private fun String.limitForStorage(): String {
         return if (length > MAX_NOTIFICATION_LENGTH) take(MAX_NOTIFICATION_LENGTH) else this
     }
@@ -484,5 +567,7 @@ class NotificationRepositoryImpl @Inject constructor(
         private const val MAX_NOTIFICATION_LENGTH = 4000
         private const val MAX_INPUT_PREVIEW_LENGTH = 120
         private val GROUP_HINT_KEYWORDS = listOf("team", "group", "팀", "단체", "프로젝트", "수신자")
+        private val CALENDAR_KEYWORDS = listOf("회의", "미팅", "일정", "마감", "제출", "발표", "오늘", "내일", "장소", "시간")
+        private val WORK_MEMORY_KEYWORDS = listOf("회의", "프로젝트", "과제", "업무", "보고서", "발표", "코드", "테스트", "마감")
     }
 }

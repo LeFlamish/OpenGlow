@@ -15,12 +15,18 @@ class RuleBasedAnalyzer @Inject constructor() {
         val projectDetected = PROJECT_KEYWORDS.any { normalized.contains(it) }
         val lowValue = LOW_VALUE_KEYWORDS.any { normalized.contains(it) }
 
+        val classifierImportance = input.classificationHint?.importanceHint?.let {
+            runCatching { ImportanceLevel.valueOf(it) }.getOrNull()
+        }
         val importance = when {
+            classifierImportance != null && (input.classificationHint.confidence >= 0.7f) -> classifierImportance
             urgent -> ImportanceLevel.URGENT
             workRelated || meetingDetected || projectDetected -> ImportanceLevel.HIGH
             lowValue -> ImportanceLevel.LOW
             else -> ImportanceLevel.NORMAL
         }
+        val classifierWorkRelated = (input.classificationHint?.workRelatedScore ?: 0f) >= 0.6f
+        val aggregateWorkRelated = workRelated || meetingDetected || projectDetected || classifierWorkRelated
 
         val oneLine = buildOneLineSummary(text, importance)
         val retainedFacts = extractRetainedFacts(text, input.previousRetainedFacts)
@@ -39,7 +45,7 @@ class RuleBasedAnalyzer @Inject constructor() {
         return NotificationAnalysisResult(
             oneLineSummary = oneLine,
             importance = importance,
-            isWorkRelated = workRelated || meetingDetected || projectDetected,
+            isWorkRelated = aggregateWorkRelated,
             senderScope = input.senderScope,
             noteTitle = buildNoteTitle(input, oneLine),
             updatedFinalSummary = finalSummary,
@@ -82,12 +88,12 @@ class RuleBasedAnalyzer @Inject constructor() {
         retainedFacts: List<String>,
     ): String {
         val parts = buildList {
-            add("최근: $newLine")
+            add(newLine)
             if (retainedFacts.isNotEmpty()) {
-                add("보존할 사실: ${retainedFacts.joinToString("; ")}")
+                add(retainedFacts.joinToString("; "))
             }
             if (!previous.isNullOrBlank()) {
-                add("이전 정리: ${previous.limit(850)}")
+                add(previous.limit(850))
             }
         }
 

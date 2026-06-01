@@ -109,6 +109,8 @@ fun SettingsScreen(
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
+
+            ModelSetupScreen()
         }
     }
 }

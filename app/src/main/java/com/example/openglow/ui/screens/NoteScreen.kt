@@ -225,7 +225,7 @@ private fun NoteCard(
     note: NoteUiModel,
     onClick: () -> Unit,
 ) {
-    val importanceColor = importanceColor(note.latestImportance)
+    val importanceColor = importanceColor(note.aggregateImportance)
 
     Card(
         colors = CardDefaults.cardColors(containerColor = CardWhite),
@@ -294,10 +294,10 @@ private fun NoteCard(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 NoteChip(text = note.platform, color = SoftGray)
-                NoteChip(text = "중요도 ${importanceLabel(note.latestImportance)}", color = importanceColor)
+                NoteChip(text = "중요도 ${importanceLabel(note.aggregateImportance)}", color = importanceColor)
                 NoteChip(
-                    text = if (note.latestIsWorkRelated) "업무 관련" else "업무 외",
-                    color = if (note.latestIsWorkRelated) PointBlue else SoftGray,
+                    text = if (note.aggregateIsWorkRelated) "업무 관련" else "업무 외",
+                    color = if (note.aggregateIsWorkRelated) PointBlue else SoftGray,
                 )
                 if (note.latestMeetingDetected) {
                     NoteChip(text = "회의", color = PointBlue)
@@ -307,6 +307,9 @@ private fun NoteCard(
                 }
                 if (!note.latestDeadlineText.isNullOrBlank()) {
                     NoteChip(text = note.latestDeadlineText, color = UrgentRed)
+                }
+                if (note.calendarCandidate) {
+                    NoteChip(text = "캘린더 후보", color = UrgentRed)
                 }
                 NoteChip(text = modelSourceLabel(note.modelSource), color = SoftGray)
             }
@@ -422,8 +425,8 @@ private fun FeedbackDialog(
     onDismiss: () -> Unit,
     onSubmit: (String?, Boolean?, String?, String?) -> Unit,
 ) {
-    var selectedImportance by remember(note.id) { mutableStateOf(note.latestImportance) }
-    var selectedWorkRelated by remember(note.id) { mutableStateOf(note.latestIsWorkRelated) }
+    var selectedImportance by remember(note.id) { mutableStateOf(note.aggregateImportance) }
+    var selectedWorkRelated by remember(note.id) { mutableStateOf(note.aggregateIsWorkRelated) }
     var selectedScope by remember(note.id) { mutableStateOf(note.senderScope) }
     var comment by remember(note.id) { mutableStateOf("") }
 

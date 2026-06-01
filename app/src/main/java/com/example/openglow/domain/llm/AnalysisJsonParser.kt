@@ -55,7 +55,7 @@ object AnalysisJsonParser {
     }
 
     private fun NotificationAnalysisResult.validated(input: NoteUpdateInput): NotificationAnalysisResult {
-        val finalSummary = updatedFinalSummary
+        val finalSummary = FinalSummarySanitizer.sanitize(updatedFinalSummary)
             .ifBlank { oneLineSummary }
             .limit(1200)
         val title = noteTitle.ifBlank { input.senderDisplayName }.limit(80)

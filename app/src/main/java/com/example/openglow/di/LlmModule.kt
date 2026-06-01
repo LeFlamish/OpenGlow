@@ -1,6 +1,6 @@
 package com.example.openglow.di
 
-import com.example.openglow.data.localai.ConfigurableLocalLlmClient
+import com.example.openglow.data.localai.LiteRtLocalLlmClient
 import com.example.openglow.data.localai.LocalLlmClient
 import dagger.Binds
 import dagger.Module
@@ -14,6 +14,6 @@ abstract class LlmModule {
     @Binds
     @Singleton
     abstract fun bindLocalLlmClient(
-        client: ConfigurableLocalLlmClient,
+        client: LiteRtLocalLlmClient,
     ): LocalLlmClient
 }

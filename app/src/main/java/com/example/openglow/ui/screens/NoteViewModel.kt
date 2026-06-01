@@ -67,8 +67,11 @@ data class NoteUiModel(
     val latestIsWorkRelated: Boolean,
     val latestMeetingDetected: Boolean,
     val latestProjectDetected: Boolean,
+    val aggregateImportance: String,
+    val aggregateIsWorkRelated: Boolean,
     val actionItems: List<String>,
     val latestDeadlineText: String?,
+    val calendarCandidate: Boolean,
     val notificationCount: Int,
     val modelSource: String,
     val confidence: Float,
@@ -118,9 +121,9 @@ class NoteViewModel @Inject constructor(
                 }
             }
             .filter { note ->
-                importance == ImportanceFilter.ALL || note.latestImportance == importance.name
+                importance == ImportanceFilter.ALL || note.aggregateImportance == importance.name
             }
-            .filter { note -> !onlyWork || note.latestIsWorkRelated }
+            .filter { note -> !onlyWork || note.aggregateIsWorkRelated }
             .filter { note ->
                 normalizedQuery.isBlank() ||
                     note.title.lowercase(Locale.KOREA).contains(normalizedQuery) ||
@@ -214,8 +217,11 @@ class NoteViewModel @Inject constructor(
             latestIsWorkRelated = note.latestIsWorkRelated,
             latestMeetingDetected = note.latestMeetingDetected,
             latestProjectDetected = note.latestProjectDetected,
+            aggregateImportance = note.aggregateImportance,
+            aggregateIsWorkRelated = note.aggregateIsWorkRelated,
             actionItems = parseJsonArray(note.latestActionItemsJson),
             latestDeadlineText = note.latestDeadlineText,
+            calendarCandidate = note.calendarCandidate,
             notificationCount = note.notificationCount,
             modelSource = note.modelSource,
             confidence = note.confidence,

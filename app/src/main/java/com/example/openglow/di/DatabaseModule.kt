@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import com.example.openglow.data.local.AppDatabase
 import com.example.openglow.data.local.dao.AnalysisLogDao
+import com.example.openglow.data.local.dao.CalendarSuggestionDao
 import com.example.openglow.data.local.dao.FeedbackDao
 import com.example.openglow.data.local.dao.NotificationDao
 import com.example.openglow.data.local.dao.NoteDao
@@ -68,5 +69,10 @@ object DatabaseModule {
     @Provides
     fun providePersonalizationRuleDao(database: AppDatabase): PersonalizationRuleDao {
         return database.personalizationRuleDao()
+    }
+
+    @Provides
+    fun provideCalendarSuggestionDao(database: AppDatabase): CalendarSuggestionDao {
+        return database.calendarSuggestionDao()
     }
 }

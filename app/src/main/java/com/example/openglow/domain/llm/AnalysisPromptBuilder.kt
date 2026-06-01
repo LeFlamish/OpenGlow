@@ -26,6 +26,18 @@ object AnalysisPromptBuilder {
         Extraction confidence:
         ${input.completenessConfidence}
 
+        Classifier hint:
+        ${input.classificationHint?.let { hint ->
+            """
+            - Work-related score: ${hint.workRelatedScore}
+            - Importance candidate: ${hint.importanceHint ?: "unknown"}
+            - Meeting score: ${hint.meetingScore}
+            - Project score: ${hint.projectScore}
+            - Classifier confidence: ${hint.confidence}
+            - Classifier model: ${hint.modelName}
+            """.trimIndent()
+        } ?: "none"}
+
         User personalization rules:
         ${input.userPersonalizationRules}
 
@@ -79,6 +91,7 @@ object AnalysisPromptBuilder {
         Display name: ${input.senderDisplayName}
         Previous summary: ${input.previousFinalSummary.orEmpty().ifBlank { "none" }}
         New text: ${input.newNotificationText}
+        Classifier hint: ${input.classificationHint ?: "none"}
 
         JSON keys:
         oneLineSummary, importance LOW/NORMAL/HIGH/URGENT, isWorkRelated, senderScope,

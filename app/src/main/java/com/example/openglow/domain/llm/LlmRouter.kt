@@ -40,8 +40,7 @@ class LlmRouter @Inject constructor(
             return Result.failure(IllegalStateException("Local LLM unavailable"))
         }
 
-        val prompt = AnalysisPromptBuilder.buildLocalPrompt(input)
-        return localLlmClient.analyze(prompt).mapCatching { responseText ->
+        return localLlmClient.analyze(input).mapCatching { responseText ->
             AnalysisJsonParser.parse(
                 gson = gson,
                 responseText = responseText,

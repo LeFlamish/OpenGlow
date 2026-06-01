@@ -9,8 +9,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -25,6 +28,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.example.openglow.data.entity.CalendarSuggestionEntity
 import com.example.openglow.ui.components.AiSummaryCard
 import com.example.openglow.ui.components.BottomNavigationBar
 import com.example.openglow.ui.components.HeaderSection
@@ -164,5 +168,70 @@ fun MainDashboardScreen(
                 }
             }
         }
+    }
+
+    aiSummaryState.pendingCalendarSuggestion?.let { suggestion ->
+        CalendarSuggestionDialog(
+            suggestion = suggestion,
+            onApprove = {
+                eventList = eventList + suggestion.toEventData()
+                viewModel.resolveCalendarSuggestion(suggestion.id, approved = true)
+            },
+            onDismiss = {
+                viewModel.resolveCalendarSuggestion(suggestion.id, approved = false)
+            },
+        )
+    }
+}
+
+@Composable
+private fun CalendarSuggestionDialog(
+    suggestion: CalendarSuggestionEntity,
+    onApprove: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("캘린더에 등록할까요?") },
+        text = {
+            Column {
+                Text(suggestion.title)
+                Spacer(Modifier.height(8.dp))
+                Text(suggestion.description)
+                suggestion.deadlineText?.let {
+                    Spacer(Modifier.height(8.dp))
+                    Text("일정 힌트: $it")
+                }
+            }
+        },
+        confirmButton = {
+            Button(onClick = onApprove) {
+                Text("등록")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("나중에")
+            }
+        },
+    )
+}
+
+private fun CalendarSuggestionEntity.toEventData(): EventData {
+    return EventData(
+        title = title,
+        type = PriorityType.URGENT,
+        deadlineTime = parseDeadline(deadlineText),
+        location = "OpenGlow",
+    )
+}
+
+private fun parseDeadline(deadlineText: String?): LocalDateTime {
+    val now = LocalDateTime.now()
+    if (deadlineText.isNullOrBlank()) return now.plusHours(1)
+    return when {
+        deadlineText.contains("내일") -> now.plusDays(1).withHour(9).withMinute(0)
+        deadlineText.contains("오늘") -> now.plusHours(1)
+        else -> now.plusHours(1)
     }
 }

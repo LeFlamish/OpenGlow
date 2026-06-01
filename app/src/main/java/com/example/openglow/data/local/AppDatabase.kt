@@ -16,8 +16,9 @@ import com.example.openglow.data.local.dao.*
         AnalysisLogEntity::class,
         FeedbackEntity::class,
         PersonalizationRuleEntity::class,
+        CalendarSuggestionEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -29,4 +30,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun analysisLogDao(): AnalysisLogDao
     abstract fun feedbackDao(): FeedbackDao
     abstract fun personalizationRuleDao(): PersonalizationRuleDao
+    abstract fun calendarSuggestionDao(): CalendarSuggestionDao
 }

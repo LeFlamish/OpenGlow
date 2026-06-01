@@ -1,5 +1,7 @@
 package com.example.openglow.domain.llm
 
+import com.example.openglow.domain.classifier.ClassificationHint
+
 enum class SenderScope {
     INDIVIDUAL,
     GROUP,
@@ -47,6 +49,7 @@ data class NoteUpdateInput(
     val newNotificationText: String,
     val textFragments: List<String>,
     val completenessConfidence: Float,
+    val classificationHint: ClassificationHint?,
     val timestamp: Long,
     val userPersonalizationRules: PersonalizationRules,
 )
