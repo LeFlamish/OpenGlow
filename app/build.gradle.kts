@@ -47,6 +47,9 @@ android {
         val modelRegistryBaseUrl = localProperties.getProperty("MODEL_REGISTRY_BASE_URL")
             ?: project.findProperty("MODEL_REGISTRY_BASE_URL") as? String
             ?: ""
+        val ragApiKey = localProperties.getProperty("RAG_API_KEY")
+            ?: project.findProperty("RAG_API_KEY") as? String
+            ?: ""
 
         // Prototype only: route Gemini calls through a backend before release.
         buildConfigField("String", "GEMINI_API_KEY", "\"${geminiApiKey.asBuildConfigString()}\"")
@@ -57,6 +60,7 @@ android {
         buildConfigField("Boolean", "LOCAL_LLM_ENABLED", enableLocalLlm.toBooleanStrictOrNull()?.toString() ?: "false")
         buildConfigField("String", "LOCAL_LLM_BACKEND", "\"${localLlmBackend.asBuildConfigString()}\"")
         buildConfigField("String", "MODEL_REGISTRY_BASE_URL", "\"${modelRegistryBaseUrl.asBuildConfigString()}\"")
+        buildConfigField("String", "RAG_API_KEY", "\"${ragApiKey.asBuildConfigString()}\"")
     }
 
     buildTypes {

@@ -3,8 +3,8 @@ package com.example.openglow.data.rag
 import android.util.Log
 import androidx.room.withTransaction
 import com.example.openglow.data.local.AppDatabase
-import com.example.openglow.data.local.dao.NotificationDao
-import com.example.openglow.data.local.dao.RagNotificationRow
+import com.example.openglow.data.local.dao.NoteDao
+import com.example.openglow.data.local.dao.RagNoteRow
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.Instant
@@ -13,6 +13,8 @@ import java.time.format.DateTimeFormatter
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
@@ -41,17 +43,31 @@ private data class RagHttpResult(
 @Singleton
 class RagRepository @Inject constructor(
     private val db: AppDatabase,
-    private val notificationDao: NotificationDao
+    private val noteDao: NoteDao
 ) {
     // Notification text is sensitive. Production deployments require HTTPS, user
     // authentication, server-side access control, masked logs, and deletion support.
     suspend fun getSyncStatus(): RagSyncStatus = withContext(Dispatchers.IO) {
         RagSyncStatus(
-            total = notificationDao.getTotalNotificationCount(),
-            uploaded = notificationDao.getRagUploadedNotificationCount(),
-            notUploaded = notificationDao.getRagNotUploadedNotificationCount()
+            total = noteDao.getTotalNoteCount(),
+            uploaded = noteDao.getRagUploadedNoteCount(),
+            notUploaded = noteDao.getRagNotUploadedNoteCount()
         )
     }
+
+    fun getSyncStatusStream(): Flow<RagSyncStatus> =
+        noteDao.getAllNotesFlow().map { notes ->
+            val uploaded = notes.count { note ->
+                note.ragUploadedAt != null &&
+                    note.ragLastUploadedNoteUpdatedAt != null &&
+                    note.ragLastUploadedNoteUpdatedAt >= note.updatedAt
+            }
+            RagSyncStatus(
+                total = notes.size,
+                uploaded = uploaded,
+                notUploaded = notes.size - uploaded,
+            )
+        }
 
     fun getServerBaseUrl(): String = RagConfig.BASE_URL
 
@@ -101,7 +117,7 @@ class RagRepository @Inject constructor(
         withContext(Dispatchers.IO) {
             require(userId.isNotBlank()) { "User ID is empty." }
 
-            val pending = notificationDao.getNotUploadedNotificationsForRag()
+            val pending = noteDao.getNotUploadedNotesForRag()
             var uploadedCount = 0
             var failedCount = 0
             var firstFailure: Throwable? = null
@@ -122,15 +138,16 @@ class RagRepository @Inject constructor(
                     val uploadedRows = if (indexedIds == null) {
                         batch
                     } else {
-                        batch.filter { documentId(userId, it.notificationId) in indexedIds }
+                        batch.filter { documentId(userId, it.noteId) in indexedIds }
                     }
                     val uploadedAt = System.currentTimeMillis()
                     db.withTransaction {
                         uploadedRows.forEach { row ->
-                            notificationDao.markNotificationAsRagUploaded(
-                                notificationId = row.notificationId,
+                            noteDao.markNoteAsRagUploaded(
+                                noteId = row.noteId,
                                 uploadedAt = uploadedAt,
-                                remoteDocumentId = documentId(userId, row.notificationId)
+                                remoteDocumentId = documentId(userId, row.noteId),
+                                noteUpdatedAt = row.updatedAt,
                             )
                         }
                     }
@@ -187,13 +204,13 @@ class RagRepository @Inject constructor(
 
     private fun createIngestPayload(
         userId: String,
-        rows: List<RagNotificationRow>
+        rows: List<RagNoteRow>
     ): JSONObject {
         val documents = JSONArray()
         rows.forEach { row ->
             documents.put(
                 JSONObject()
-                    .put("id", documentId(userId, row.notificationId))
+                    .put("id", documentId(userId, row.noteId))
                     .put("text", createDocumentText(row))
                     .put("metadata", createMetadata(userId, row))
             )
@@ -203,39 +220,94 @@ class RagRepository @Inject constructor(
             .put("documents", documents)
     }
 
-    private fun createMetadata(userId: String, row: RagNotificationRow): JSONObject =
+    private fun createMetadata(userId: String, row: RagNoteRow): JSONObject =
         JSONObject()
             .put("userId", userId)
-            .put("source", "notification")
-            .put("notificationId", row.notificationId)
+            .put("source", "note")
+            .put("noteId", row.noteId)
             .put("senderId", row.senderId)
-            .put("identifierId", row.identifierId)
-            .put("senderName", row.senderName)
             .put("senderDisplayName", row.senderDisplayName)
+            .put("senderScope", row.senderScope)
             .put("platform", row.platform)
-            .put("identifierValue", row.identifierValue)
-            .put("packageName", row.packageName)
-            .put("timestamp", ISO_FORMATTER.format(Instant.ofEpochMilli(row.timestamp)))
-            .put("localTimestamp", row.timestamp)
-            .put("isSummarized", row.isSummarized)
+            .put("title", row.title)
+            .put("latestImportance", row.latestImportance)
+            .put("aggregateImportance", row.aggregateImportance)
+            .put("latestIsWorkRelated", row.latestIsWorkRelated)
+            .put("aggregateIsWorkRelated", row.aggregateIsWorkRelated)
+            .put("latestMeetingDetected", row.latestMeetingDetected)
+            .put("latestProjectDetected", row.latestProjectDetected)
+            .put("latestDeadlineText", row.latestDeadlineText)
+            .put("calendarCandidate", row.calendarCandidate)
+            .put("notificationCount", row.notificationCount)
+            .put("modelSource", row.modelSource)
+            .put("confidence", row.confidence)
+            .put("createdAt", ISO_FORMATTER.format(Instant.ofEpochMilli(row.createdAt)))
+            .put("updatedAt", ISO_FORMATTER.format(Instant.ofEpochMilli(row.updatedAt)))
+            .put("localCreatedAt", row.createdAt)
+            .put("localUpdatedAt", row.updatedAt)
 
-    private fun createDocumentText(row: RagNotificationRow): String {
-        val time = LOCAL_FORMATTER.format(Instant.ofEpochMilli(row.timestamp))
-        val sender = row.senderName ?: row.senderDisplayName
-        return "[${platformLabel(row.platform)}] Notification from $sender at $time. Content: ${row.content}"
+    private fun createDocumentText(row: RagNoteRow): String {
+        val updatedTime = LOCAL_FORMATTER.format(Instant.ofEpochMilli(row.updatedAt))
+        val retainedFacts = parseJsonArray(row.retainedFactsJson)
+        val actionItems = parseJsonArray(row.latestActionItemsJson)
+        return buildString {
+            appendLine("Title: ${row.title}")
+            appendLine("Sender: ${row.senderDisplayName} (${row.senderScope}, ${platformLabel(row.platform)})")
+            appendLine("Updated: $updatedTime")
+            appendLine("Importance: latest=${row.latestImportance}, aggregate=${row.aggregateImportance}")
+            appendLine("Work related: latest=${row.latestIsWorkRelated}, aggregate=${row.aggregateIsWorkRelated}")
+            row.latestDeadlineText?.takeIf(String::isNotBlank)?.let { appendLine("Deadline: $it") }
+            appendLine("Latest summary: ${row.latestOneLineSummary}")
+            appendLine("Final summary: ${row.finalSummary}")
+            if (retainedFacts.isNotEmpty()) {
+                appendLine("Retained facts:")
+                retainedFacts.forEach { appendLine("- $it") }
+            }
+            if (actionItems.isNotEmpty()) {
+                appendLine("Action items:")
+                actionItems.forEach { appendLine("- $it") }
+            }
+            appendLine("Notification count summarized into this note: ${row.notificationCount}")
+            appendLine("Model source: ${row.modelSource}, confidence=${row.confidence}")
+        }.trim()
     }
 
-    private fun extractAnswer(response: JSONObject): String? =
-        listOf("answer", "result", "output", "message")
-            .firstNotNullOfOrNull { key -> response.optString(key).takeIf(String::isNotBlank) }
-            ?: response.optJSONArray("outputs")
+    private fun extractAnswer(response: JSONObject): String? {
+        val directAnswer = response.optString("answer").takeIf(String::isNotBlank)
+        if (directAnswer != null) return extractAnswerFromPossibleJson(directAnswer)
+
+        val candidates = listOfNotNull(
+            response.optString("result").takeIf(String::isNotBlank),
+            response.optString("output").takeIf(String::isNotBlank),
+            response.optString("message").takeIf(String::isNotBlank),
+            response.optJSONArray("outputs")
                 ?.optJSONObject(0)
                 ?.optJSONArray("outputs")
                 ?.optJSONObject(0)
                 ?.optJSONObject("results")
                 ?.optJSONObject("message")
                 ?.optString("text")
-                ?.takeIf(String::isNotBlank)
+                ?.takeIf(String::isNotBlank),
+        )
+
+        return candidates.firstNotNullOfOrNull(::extractAnswerFromPossibleJson)
+    }
+
+    private fun extractAnswerFromPossibleJson(value: String): String? {
+        val trimmed = value.trim()
+        if (!trimmed.startsWith("{")) return trimmed
+
+        return runCatching { JSONObject(trimmed) }
+            .getOrNull()
+            ?.let { json ->
+                json.optString("answer").takeIf(String::isNotBlank)
+                    ?: json.optString("result").takeIf(String::isNotBlank)
+                    ?: json.optString("output").takeIf(String::isNotBlank)
+                    ?: json.optString("message").takeIf(String::isNotBlank)
+            }
+            ?.trim()
+            ?.takeIf(String::isNotBlank)
+    }
 
     private fun getStatusCode(path: String): Int {
         check(RagConfig.BASE_URL.isNotBlank()) { "RAG server URL is empty." }
@@ -338,8 +410,15 @@ class RagRepository @Inject constructor(
     private fun JSONArray.toStringList(): List<String> =
         (0 until length()).mapNotNull { index -> optString(index).takeIf(String::isNotBlank) }
 
-    private fun documentId(userId: String, notificationId: Long): String =
-        "${userId}_notification_$notificationId"
+    private fun parseJsonArray(json: String): List<String> =
+        runCatching {
+            val array = JSONArray(json)
+            List(array.length()) { index -> array.optString(index) }
+                .filter { it.isNotBlank() }
+        }.getOrDefault(emptyList())
+
+    private fun documentId(userId: String, noteId: Long): String =
+        "${userId}_note_$noteId"
 
     private fun platformLabel(platform: String): String = when (platform) {
         "KAKAO" -> "KakaoTalk"

@@ -24,18 +24,18 @@ data class RagUiState(
     val question: String = "",
     val answer: String? = null,
     val errorMessage: String? = null,
-    val syncMessage: String? = null
+    val syncMessage: String? = null,
 )
 
 @HiltViewModel
 class RagViewModel @Inject constructor(
-    private val repository: RagRepository
+    private val repository: RagRepository,
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(RagUiState(serverBaseUrl = repository.getServerBaseUrl()))
     val uiState: StateFlow<RagUiState> = _uiState.asStateFlow()
 
     init {
-        refreshStatus()
+        observeSyncStatus()
     }
 
     fun updateQuestion(question: String) {
@@ -51,27 +51,24 @@ class RagViewModel @Inject constructor(
                 it.copy(
                     isTestingConnection = false,
                     syncMessage = result.message.takeIf { result.success },
-                    errorMessage = result.message.takeUnless { result.success }
+                    errorMessage = result.message.takeUnless { result.success },
                 )
             }
         }
     }
 
-    fun refreshStatus() {
+    private fun observeSyncStatus() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingStatus = true, errorMessage = null) }
-            runCatching { repository.getSyncStatus() }
-                .onSuccess { status ->
-                    _uiState.update {
-                        it.copy(
-                            isLoadingStatus = false,
-                            totalCount = status.total,
-                            uploadedCount = status.uploaded,
-                            notUploadedCount = status.notUploaded
-                        )
-                    }
+            repository.getSyncStatusStream().collect { status ->
+                _uiState.update {
+                    it.copy(
+                        isLoadingStatus = false,
+                        totalCount = status.total,
+                        uploadedCount = status.uploaded,
+                        notUploadedCount = status.notUploaded,
+                    )
                 }
-                .onFailure(::showError)
+            }
         }
     }
 
@@ -88,10 +85,9 @@ class RagViewModel @Inject constructor(
                                 "동기화가 완료되었습니다."
                             } else {
                                 "${result.uploadedCount}개 업로드, ${result.failedCount}개 실패"
-                            }
+                            },
                         )
                     }
-                    refreshStatus()
                 }
                 .onFailure(::showError)
         }
@@ -121,7 +117,7 @@ class RagViewModel @Inject constructor(
                 isAsking = false,
                 isTestingConnection = false,
                 errorMessage = error.message
-                    ?: "RAG 서버와 통신하지 못했습니다. 네트워크 상태와 서버 주소를 확인해 주세요."
+                    ?: "RAG 서버와 통신하지 못했습니다. 네트워크 상태와 서버 주소를 확인해 주세요.",
             )
         }
     }

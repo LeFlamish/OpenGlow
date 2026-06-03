@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -31,7 +32,7 @@ fun BottomNavigationBar(
         BottomNavItem("노트", Icons.Default.Description),
         BottomNavItem("캘린더", Icons.Default.CalendarToday),
         BottomNavItem("홈", Icons.Default.Home),
-        BottomNavItem("AI", Icons.Default.AutoAwesome),
+        BottomNavItem("RAG", Icons.Default.AutoAwesome),
         BottomNavItem("설정", Icons.Default.Settings),
     )
 
@@ -45,8 +46,8 @@ fun BottomNavigationBar(
                 selected = isSelected,
                 onClick = { onTabSelected(index) },
                 icon = {
-                    val iconSize = if (item.label == "홈" || item.label == "AI") 28.dp else 24.dp
-                    androidx.compose.material3.Icon(
+                    val iconSize = if (item.label == "홈" || item.label == "RAG") 28.dp else 24.dp
+                    Icon(
                         item.icon,
                         contentDescription = item.label,
                         modifier = Modifier.size(iconSize),

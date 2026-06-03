@@ -87,31 +87,13 @@ class NotificationLogListenerService : NotificationListenerService() {
     }
 
     private fun logNotification(notification: ReceivedNotification) {
-<<<<<<< Updated upstream
-        Log.i(
-            TAG,
-            """
-            ================ Notification received ================
-            packageName: ${notification.packageName}
-            appName: ${notification.appName}
-            notificationKey: ${notification.notificationKey}
-            postTime: ${notification.postTimeText} (${notification.postTime})
-            category: ${notification.category}
-            sourceTypes: ${notification.extractionSourceTypes}
-            textLength: ${notification.extractedFullText.length}
-            completenessConfidence: ${notification.completenessConfidence}
-            isLikelyComplete: ${notification.isLikelyComplete}
-            groupHint: ${notification.groupHint}
-            debugInfo: ${notification.extractionDebugInfo}
-            ==========================================
-            """.trimIndent(),
-=======
         // Notification content is sensitive. Never print the full payload in production logs.
         Log.i(
             TAG,
             "Notification received: packageName=${notification.packageName}, " +
-                "postTime=${notification.postTime}, category=${notification.category}",
->>>>>>> Stashed changes
+                "postTime=${notification.postTime}, category=${notification.category}, " +
+                "textLength=${notification.extractedFullText.length}, " +
+                "confidence=${notification.completenessConfidence}",
         )
     }
 
@@ -129,9 +111,5 @@ class NotificationLogListenerService : NotificationListenerService() {
     companion object {
         private const val TAG = "NotificationListener"
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA)
-<<<<<<< Updated upstream
-=======
-
->>>>>>> Stashed changes
     }
 }

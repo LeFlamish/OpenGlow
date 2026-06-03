@@ -17,6 +17,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -40,32 +41,30 @@ fun RagScreen(viewModel: RagViewModel = hiltViewModel()) {
             .background(BackgroundGray)
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("알림 기반 RAG", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-        Text(
-            "문자, 카카오톡, 이메일 알림을 기반으로 질문할 수 있습니다.\n" +
-                "먼저 알림 데이터를 RAG 서버와 동기화한 뒤 질문해 주세요.",
-            style = MaterialTheme.typography.bodyMedium
-        )
-
-        RagCard(title = "RAG 서버") {
-            Text("현재 RAG 서버:")
-            Text(state.serverBaseUrl, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
-            Button(
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("노트 기반 RAG", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+                Text("저장된 노트 요약을 동기화한 뒤 질문합니다.", style = MaterialTheme.typography.bodyMedium)
+            }
+            OutlinedButton(
                 onClick = viewModel::testServerConnection,
                 enabled = !state.isTestingConnection,
-                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(if (state.isTestingConnection) "연결 테스트 중입니다..." else "RAG 서버 연결 테스트")
+                Text(if (state.isTestingConnection) "확인 중" else "서버 연결 확인")
             }
         }
 
-        RagCard(title = "RAG 동기화 상태") {
+        RagCard(title = "동기화 상태") {
             if (state.isLoadingStatus) {
                 CircularProgressIndicator()
             } else {
-                Text("전체 알림: ${state.totalCount}개")
+                Text("전체 노트: ${state.totalCount}개")
                 Text("동기화 완료: ${state.uploadedCount}개")
                 Text("동기화 필요: ${state.notUploadedCount}개")
             }
@@ -73,17 +72,17 @@ fun RagScreen(viewModel: RagViewModel = hiltViewModel()) {
             Button(
                 onClick = viewModel::syncNotifications,
                 enabled = !state.isSyncing,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 if (state.isSyncing) {
                     CircularProgressIndicator(
                         modifier = Modifier.height(20.dp),
                         strokeWidth = 2.dp,
-                        color = Color.White
+                        color = Color.White,
                     )
                     Text("  동기화 중입니다...")
                 } else {
-                    Text("알림 데이터 동기화")
+                    Text("노트 데이터 동기화")
                 }
             }
         }
@@ -92,14 +91,14 @@ fun RagScreen(viewModel: RagViewModel = hiltViewModel()) {
             OutlinedTextField(
                 value = state.question,
                 onValueChange = viewModel::updateQuestion,
-                placeholder = { Text("예: 김민수가 최근 약속과 관련해 뭐라고 했어?") },
+                placeholder = { Text("예: 최근 중요한 일정과 해야 할 일을 알려줘") },
                 modifier = Modifier.fillMaxWidth(),
-                minLines = 3
+                minLines = 3,
             )
             Button(
                 onClick = viewModel::askQuestion,
                 enabled = !state.isAsking,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(if (state.isAsking) "답변을 생성하는 중입니다..." else "질문하기")
             }
@@ -112,12 +111,12 @@ fun RagScreen(viewModel: RagViewModel = hiltViewModel()) {
         state.errorMessage?.let { error ->
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Text(
                     text = error,
                     color = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(16.dp)
+                    modifier = Modifier.padding(16.dp),
                 )
             }
         }
@@ -128,20 +127,18 @@ fun RagScreen(viewModel: RagViewModel = hiltViewModel()) {
 @Composable
 private fun RagCard(
     title: String,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+        shape = RoundedCornerShape(8.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
     ) {
         Column(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-            }
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             content()
         }
     }

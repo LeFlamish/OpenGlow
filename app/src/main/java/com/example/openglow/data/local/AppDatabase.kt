@@ -3,8 +3,23 @@ package com.example.openglow.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
-import com.example.openglow.data.entity.*
-import com.example.openglow.data.local.dao.*
+import com.example.openglow.data.entity.AnalysisLogEntity
+import com.example.openglow.data.entity.CalendarSuggestionEntity
+import com.example.openglow.data.entity.FeedbackEntity
+import com.example.openglow.data.entity.NoteEntity
+import com.example.openglow.data.entity.NotificationEntity
+import com.example.openglow.data.entity.PersonalizationRuleEntity
+import com.example.openglow.data.entity.SenderEntity
+import com.example.openglow.data.entity.SenderIdentifierEntity
+import com.example.openglow.data.entity.SummaryEntity
+import com.example.openglow.data.local.dao.AnalysisLogDao
+import com.example.openglow.data.local.dao.CalendarSuggestionDao
+import com.example.openglow.data.local.dao.FeedbackDao
+import com.example.openglow.data.local.dao.NoteDao
+import com.example.openglow.data.local.dao.NotificationDao
+import com.example.openglow.data.local.dao.PersonalizationRuleDao
+import com.example.openglow.data.local.dao.SenderDao
+import com.example.openglow.data.local.dao.SummaryDao
 
 @Database(
     entities = [
@@ -18,12 +33,8 @@ import com.example.openglow.data.local.dao.*
         PersonalizationRuleEntity::class,
         CalendarSuggestionEntity::class,
     ],
-<<<<<<< Updated upstream
-    version = 5,
-=======
-    version = 2,
->>>>>>> Stashed changes
-    exportSchema = false
+    version = 6,
+    exportSchema = false,
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {

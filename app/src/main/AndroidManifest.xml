@@ -3,10 +3,7 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
-<<<<<<< Updated upstream
-=======
-    <!-- MVP 테스트 단계에서는 HTTP cleartext 통신을 허용하지만, 운영 환경에서는 HTTPS를 사용해야 한다. -->
->>>>>>> Stashed changes
+    <!-- Local RAG/Langflow testing uses HTTP. Production builds should use HTTPS. -->
     <application
         android:name=".OpenGlowApplication"
         android:allowBackup="true"

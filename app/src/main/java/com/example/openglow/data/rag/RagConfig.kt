@@ -1,5 +1,7 @@
 package com.example.openglow.data.rag
 
+import com.example.openglow.BuildConfig
+
 object RagConfig {
     // Android emulator -> host PC localhost.
     const val EMULATOR_BASE_URL = "http://10.0.2.2:7860"
@@ -10,9 +12,7 @@ object RagConfig {
     // Current target. Use EMULATOR_BASE_URL for emulator tests, DEVICE_BASE_URL for real devices.
     const val BASE_URL = DEVICE_BASE_URL
 
-    // If Langflow API access shows an API key, paste it here for local testing.
-    // Leave blank only when Langflow is started with auth disabled for development.
-    const val API_KEY = "sk-dLUB2zQC93qkyqSqwXj5ywnmpUaoo-alSg5_INBYMMs"
+    val API_KEY: String = BuildConfig.RAG_API_KEY
 
     // Langflow's default Flow API is /api/v1/run/{FLOW_ID}. Replace these IDs with real Flow IDs.
     const val INGEST_FLOW_ID = "79928ccd-f021-4f2b-b563-bba5bf028801"

@@ -21,12 +21,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.openglow.data.entity.CalendarSuggestionEntity
 import com.example.openglow.ui.components.AiSummaryCard
@@ -66,8 +64,9 @@ fun MainDashboardScreen(
         val savedEvents = sharedPrefs.getString("unified_events_data", "") ?: ""
         if (savedEvents.isNotBlank()) {
             runCatching {
-                eventList = savedEvents.split("&&").map {
-                    val parts = it.split("||")
+                eventList = savedEvents.split("&&").mapNotNull { encoded ->
+                    val parts = encoded.split("||")
+                    if (parts.size < 5) return@mapNotNull null
                     EventData(
                         id = parts[0],
                         title = parts[1],
@@ -118,6 +117,7 @@ fun MainDashboardScreen(
                     NoteScreen()
                 }
             }
+
             1 -> {
                 Box(modifier = Modifier.padding(padding)) {
                     CalendarScreen(
@@ -126,6 +126,7 @@ fun MainDashboardScreen(
                     )
                 }
             }
+
             2 -> {
                 Column(
                     modifier = Modifier
@@ -152,34 +153,20 @@ fun MainDashboardScreen(
                     )
                 }
             }
+
             3 -> {
-<<<<<<< Updated upstream
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("AI 실험 화면은 준비 중입니다.", color = Color.Gray, fontSize = 16.sp)
-                }
-            }
-            4 -> {
-                Box(modifier = Modifier.padding(padding)) {
-                    SettingsScreen()
-=======
                 Box(modifier = Modifier.padding(padding)) {
                     RagScreen()
                 }
             }
-            else -> {
-                Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                    Text("준비 중인 화면입니다.", color = Color.Gray, fontSize = 16.sp)
->>>>>>> Stashed changes
+
+            4 -> {
+                Box(modifier = Modifier.padding(padding)) {
+                    SettingsScreen()
                 }
             }
         }
     }
-<<<<<<< Updated upstream
 
     aiSummaryState.pendingCalendarSuggestion?.let { suggestion ->
         CalendarSuggestionDialog(
@@ -245,6 +232,4 @@ private fun parseDeadline(deadlineText: String?): LocalDateTime {
         deadlineText.contains("오늘") -> now.plusHours(1)
         else -> now.plusHours(1)
     }
-=======
->>>>>>> Stashed changes
 }

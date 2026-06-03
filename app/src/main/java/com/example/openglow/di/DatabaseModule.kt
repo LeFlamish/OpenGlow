@@ -3,6 +3,8 @@ package com.example.openglow.di
 import android.content.Context
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.openglow.data.local.AppDatabase
 import com.example.openglow.data.local.dao.AnalysisLogDao
 import com.example.openglow.data.local.dao.CalendarSuggestionDao
@@ -32,6 +34,7 @@ object DatabaseModule {
             "openglow_database"
         )
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+            .addMigrations(MIGRATION_5_6)
             // Development only: production builds must use an explicit Room migration.
             .fallbackToDestructiveMigration()
             .build()
@@ -75,5 +78,13 @@ object DatabaseModule {
     @Provides
     fun provideCalendarSuggestionDao(database: AppDatabase): CalendarSuggestionDao {
         return database.calendarSuggestionDao()
+    }
+
+    private val MIGRATION_5_6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE notes ADD COLUMN ragUploadedAt INTEGER")
+            db.execSQL("ALTER TABLE notes ADD COLUMN ragRemoteDocumentId TEXT")
+            db.execSQL("ALTER TABLE notes ADD COLUMN ragLastUploadedNoteUpdatedAt INTEGER")
+        }
     }
 }

@@ -37,4 +37,7 @@ data class NoteEntity(
     val confidence: Float,
     val createdAt: Long,
     val updatedAt: Long,
+    val ragUploadedAt: Long? = null,
+    val ragRemoteDocumentId: String? = null,
+    val ragLastUploadedNoteUpdatedAt: Long? = null,
 )
