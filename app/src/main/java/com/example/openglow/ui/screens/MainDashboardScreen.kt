@@ -153,6 +153,7 @@ fun MainDashboardScreen(
                 }
             }
             3 -> {
+<<<<<<< Updated upstream
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -165,10 +166,20 @@ fun MainDashboardScreen(
             4 -> {
                 Box(modifier = Modifier.padding(padding)) {
                     SettingsScreen()
+=======
+                Box(modifier = Modifier.padding(padding)) {
+                    RagScreen()
+                }
+            }
+            else -> {
+                Box(modifier = Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                    Text("준비 중인 화면입니다.", color = Color.Gray, fontSize = 16.sp)
+>>>>>>> Stashed changes
                 }
             }
         }
     }
+<<<<<<< Updated upstream
 
     aiSummaryState.pendingCalendarSuggestion?.let { suggestion ->
         CalendarSuggestionDialog(
@@ -234,4 +245,6 @@ private fun parseDeadline(deadlineText: String?): LocalDateTime {
         deadlineText.contains("오늘") -> now.plusHours(1)
         else -> now.plusHours(1)
     }
+=======
+>>>>>>> Stashed changes
 }

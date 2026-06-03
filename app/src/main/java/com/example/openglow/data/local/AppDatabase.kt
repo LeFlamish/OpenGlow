@@ -18,7 +18,11 @@ import com.example.openglow.data.local.dao.*
         PersonalizationRuleEntity::class,
         CalendarSuggestionEntity::class,
     ],
+<<<<<<< Updated upstream
     version = 5,
+=======
+    version = 2,
+>>>>>>> Stashed changes
     exportSchema = false
 )
 @TypeConverters(Converters::class)

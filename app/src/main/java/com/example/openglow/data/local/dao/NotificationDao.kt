@@ -4,6 +4,21 @@ import androidx.room.*
 import com.example.openglow.data.entity.NotificationEntity
 import kotlinx.coroutines.flow.Flow
 
+data class RagNotificationRow(
+    val notificationId: Long,
+    val identifierId: Long,
+    val senderId: Long,
+    val senderName: String?,
+    val senderDisplayName: String,
+    val platform: String,
+    val identifierValue: String,
+    val packageName: String,
+    val content: String,
+    val timestamp: Long,
+    val isSummarized: Boolean,
+    val isRagUploaded: Boolean
+)
+
 @Dao
 interface NotificationDao {
     // 새 알림 저장 (백그라운드 알림 수신 시 호출)
@@ -38,4 +53,48 @@ interface NotificationDao {
     // thresholdTime: 기준이 되는 과거 시간 (예: 7일 전)
     @Query("DELETE FROM notifications WHERE isSummarized = 1 AND timestamp < :thresholdTime")
     suspend fun deleteOldSummarizedNotifications(thresholdTime: Long)
+
+    @Query("""
+        SELECT
+            n.id AS notificationId,
+            n.identifierId AS identifierId,
+            s.id AS senderId,
+            n.senderName AS senderName,
+            s.displayName AS senderDisplayName,
+            si.platform AS platform,
+            si.identifierValue AS identifierValue,
+            n.packageName AS packageName,
+            n.content AS content,
+            n.timestamp AS timestamp,
+            n.isSummarized AS isSummarized,
+            n.isRagUploaded AS isRagUploaded
+        FROM notifications n
+        INNER JOIN sender_identifiers si ON n.identifierId = si.id
+        INNER JOIN senders s ON si.senderId = s.id
+        WHERE n.isRagUploaded = 0
+        ORDER BY n.timestamp ASC
+    """)
+    suspend fun getNotUploadedNotificationsForRag(): List<RagNotificationRow>
+
+    @Query("SELECT COUNT(*) FROM notifications")
+    suspend fun getTotalNotificationCount(): Int
+
+    @Query("SELECT COUNT(*) FROM notifications WHERE isRagUploaded = 1")
+    suspend fun getRagUploadedNotificationCount(): Int
+
+    @Query("SELECT COUNT(*) FROM notifications WHERE isRagUploaded = 0")
+    suspend fun getRagNotUploadedNotificationCount(): Int
+
+    @Query("""
+        UPDATE notifications
+        SET isRagUploaded = 1,
+            ragUploadedAt = :uploadedAt,
+            ragRemoteDocumentId = :remoteDocumentId
+        WHERE id = :notificationId
+    """)
+    suspend fun markNotificationAsRagUploaded(
+        notificationId: Long,
+        uploadedAt: Long,
+        remoteDocumentId: String
+    )
 }

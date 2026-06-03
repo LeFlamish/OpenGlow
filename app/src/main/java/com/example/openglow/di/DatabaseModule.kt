@@ -32,6 +32,7 @@ object DatabaseModule {
             "openglow_database"
         )
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
+            // Development only: production builds must use an explicit Room migration.
             .fallbackToDestructiveMigration()
             .build()
     }

@@ -31,4 +31,10 @@ data class NotificationEntity(
     val isLikelyComplete: Boolean,
     val timestamp: Long,
     val isSummarized: Boolean = false,
+<<<<<<< Updated upstream
+=======
+    val isRagUploaded: Boolean = false,
+    val ragUploadedAt: Long? = null,
+    val ragRemoteDocumentId: String? = null
+>>>>>>> Stashed changes
 )

@@ -87,6 +87,7 @@ class NotificationLogListenerService : NotificationListenerService() {
     }
 
     private fun logNotification(notification: ReceivedNotification) {
+<<<<<<< Updated upstream
         Log.i(
             TAG,
             """
@@ -104,6 +105,13 @@ class NotificationLogListenerService : NotificationListenerService() {
             debugInfo: ${notification.extractionDebugInfo}
             ==========================================
             """.trimIndent(),
+=======
+        // Notification content is sensitive. Never print the full payload in production logs.
+        Log.i(
+            TAG,
+            "Notification received: packageName=${notification.packageName}, " +
+                "postTime=${notification.postTime}, category=${notification.category}",
+>>>>>>> Stashed changes
         )
     }
 
@@ -121,5 +129,9 @@ class NotificationLogListenerService : NotificationListenerService() {
     companion object {
         private const val TAG = "NotificationListener"
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA)
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
     }
 }
