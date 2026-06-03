@@ -176,3 +176,4 @@ fun NotificationDetailItem(notification: NotificationEntity) {
         }
     }
 }
+
