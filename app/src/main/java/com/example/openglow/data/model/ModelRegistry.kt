@@ -23,11 +23,14 @@ data class AppModelInfo(
 )
 
 object ModelRegistry {
+    const val LOCAL_LLM_ID = "local_llm_qwen2_5_1_5b"
+    const val KC_ELECTRA_ID = "kcelectra_classifier"
+
     val recommendedLocalLlm = AppModelInfo(
-        id = "qwen2_5_1_5b_litertlm",
+        id = LOCAL_LLM_ID,
         kind = ModelKind.LOCAL_LLM,
         displayName = "Qwen2.5 1.5B Local LLM",
-        description = "한국어 알림 요약 및 노트 정리용 로컬 LLM",
+        description = "알림 요약과 노트 정리를 기기 안에서 수행하는 LiteRT-LM 로컬 LLM",
         recommended = true,
         targetDirectoryName = "local_llm",
         artifacts = listOf(
@@ -41,16 +44,16 @@ object ModelRegistry {
     )
 
     val recommendedKcElectra = AppModelInfo(
-        id = "kcelectra_classifier",
+        id = KC_ELECTRA_ID,
         kind = ModelKind.TEXT_CLASSIFIER,
         displayName = "KcELECTRA Korean Notification Classifier",
-        description = "중요도, 업무 여부, 회의/프로젝트 여부 분류용 한국어 분류 모델",
+        description = "KcELECTRA는 아직 설정되지 않았습니다. 현재는 RuleBased 분류기를 사용합니다.",
         recommended = true,
         targetDirectoryName = "kcelectra",
         artifacts = listOf(
             ModelArtifactInfo(
-                fileName = "model.onnx",
-                downloadUrl = "TODO_KCELECTRA_ONNX_URL",
+                fileName = "model.tflite",
+                downloadUrl = "TODO_KCELECTRA_TFLITE_URL",
                 sha256 = "TODO_SHA256",
                 sizeBytes = 300_000_000L,
             ),

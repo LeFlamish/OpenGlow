@@ -18,6 +18,7 @@ import okhttp3.Request
 sealed class ModelDownloadState {
     object NotDownloaded : ModelDownloadState()
     object Checking : ModelDownloadState()
+    data class NotConfigured(val modelId: String, val message: String) : ModelDownloadState()
     data class Downloading(
         val modelId: String,
         val currentFileName: String,
@@ -28,6 +29,7 @@ sealed class ModelDownloadState {
     data class Verifying(val modelId: String) : ModelDownloadState()
     data class Ready(val modelId: String, val directoryPath: String) : ModelDownloadState()
     data class Failed(val modelId: String, val message: String) : ModelDownloadState()
+    data class Cancelled(val modelId: String) : ModelDownloadState()
 }
 
 @Singleton
@@ -42,22 +44,25 @@ class ModelDownloadManager @Inject constructor(
         return File(File(context.filesDir, "models"), model.targetDirectoryName)
     }
 
-    fun isModelReady(model: AppModelInfo): Boolean {
-        val directory = getModelDirectory(model)
-        return model.artifacts.all { artifact ->
-            val file = File(directory, artifact.fileName)
-            file.exists() && file.length() > 0L && hasConfiguredChecksum(artifact) && file.sha256() == artifact.sha256
-        }
-    }
-
     fun getModelStateFlow(modelId: String): StateFlow<ModelDownloadState> {
         val model = ModelRegistry.byId(modelId)
-        val initial = if (model != null && isModelReady(model)) {
-            ModelDownloadState.Ready(model.id, getModelDirectory(model).absolutePath)
-        } else {
-            ModelDownloadState.NotDownloaded
-        }
+        val initial = model?.let(::currentStateFor) ?: ModelDownloadState.NotDownloaded
         return stateFlows.getOrPut(modelId) { MutableStateFlow(initial) }
+    }
+
+    fun refreshModelState(model: AppModelInfo) {
+        mutableState(model.id).value = currentStateFor(model)
+    }
+
+    fun isModelReady(model: AppModelInfo): Boolean {
+        val directory = getModelDirectory(model)
+        return model.artifacts.isNotEmpty() && model.artifacts.all { artifact ->
+            val file = File(directory, artifact.fileName)
+            file.exists() &&
+                file.length() > 0L &&
+                hasConfiguredChecksum(artifact) &&
+                file.sha256() == artifact.sha256.lowercase()
+        }
     }
 
     suspend fun downloadModel(model: AppModelInfo): Result<Unit> = withContext(Dispatchers.IO) {
@@ -66,7 +71,10 @@ class ModelDownloadManager @Inject constructor(
             state.value = ModelDownloadState.Checking
             cancelledModelId = null
 
-            validateRegistry(model)
+            configurationIssue(model)?.let { message ->
+                state.value = ModelDownloadState.NotConfigured(model.id, message)
+                throw IllegalStateException(message)
+            }
             ensureStorageAvailable(model)
 
             val directory = getModelDirectory(model)
@@ -75,19 +83,23 @@ class ModelDownloadManager @Inject constructor(
 
             try {
                 model.artifacts.forEach { artifact ->
-                    if (cancelledModelId == model.id) error("Download cancelled")
+                    throwIfCancelled(model.id)
                     downloadArtifact(model, artifact, directory, state)
                 }
 
                 state.value = ModelDownloadState.Verifying(model.id)
                 val verified = model.artifacts.all { artifact ->
-                    File(directory, artifact.fileName).sha256() == artifact.sha256
+                    File(directory, artifact.fileName).sha256() == artifact.sha256.lowercase()
                 }
                 if (!verified) error("SHA-256 verification failed")
 
                 state.value = ModelDownloadState.Ready(model.id, directory.absolutePath)
                 Log.i(TAG, "Model ready: id=${model.id}, dir=${directory.absolutePath}")
                 Unit
+            } catch (e: ModelDownloadCancelledException) {
+                directory.deleteRecursively()
+                state.value = ModelDownloadState.Cancelled(model.id)
+                throw e
             } catch (e: Throwable) {
                 directory.deleteRecursively()
                 state.value = ModelDownloadState.Failed(model.id, e.message ?: "Download failed")
@@ -99,39 +111,65 @@ class ModelDownloadManager @Inject constructor(
     suspend fun deleteModel(model: AppModelInfo): Result<Unit> = withContext(Dispatchers.IO) {
         runCatching {
             getModelDirectory(model).deleteRecursively()
-            mutableState(model.id).value = ModelDownloadState.NotDownloaded
+            mutableState(model.id).value = currentStateFor(model)
         }
     }
 
     fun cancelDownload(modelId: String) {
         cancelledModelId = modelId
-        mutableState(modelId).value = ModelDownloadState.Failed(modelId, "Download cancelled")
+        mutableState(modelId).value = ModelDownloadState.Cancelled(modelId)
     }
 
     fun getLocalLlmModelFile(): File? {
-        val model = ModelRegistry.recommendedLocalLlm
-        if (!isModelReady(model)) return null
-        return File(getModelDirectory(model), "model.litertlm").takeIf { it.exists() }
+        return File(File(context.filesDir, "models/local_llm"), "model.litertlm")
+            .takeIf { it.exists() && it.isFile && it.length() > 0L }
     }
 
     fun getKcElectraModelDirectory(): File? {
-        val model = ModelRegistry.recommendedKcElectra
-        if (!isModelReady(model)) return null
-        return getModelDirectory(model).takeIf { it.exists() }
+        val directory = File(context.filesDir, "models/kcelectra")
+        val requiredFiles = listOf(
+            "model.tflite",
+            "vocab.txt",
+            "tokenizer_config.json",
+            "label_map.json",
+        )
+        return directory.takeIf { dir ->
+            dir.exists() && requiredFiles.all { name ->
+                File(dir, name).let { it.exists() && it.isFile && it.length() > 0L }
+            }
+        }
+    }
+
+    fun configurationIssue(model: AppModelInfo): String? {
+        if (model.artifacts.isEmpty()) {
+            return notConfiguredMessage(model)
+        }
+        val hasUnconfiguredArtifact = model.artifacts.any { artifact ->
+            artifact.downloadUrl.isBlank() ||
+                artifact.downloadUrl.startsWith("TODO", ignoreCase = true) ||
+                !hasConfiguredChecksum(artifact)
+        }
+        return if (hasUnconfiguredArtifact) notConfiguredMessage(model) else null
+    }
+
+    private fun currentStateFor(model: AppModelInfo): ModelDownloadState {
+        return when {
+            isModelReady(model) -> ModelDownloadState.Ready(model.id, getModelDirectory(model).absolutePath)
+            configurationIssue(model) != null -> ModelDownloadState.NotConfigured(model.id, configurationIssue(model).orEmpty())
+            else -> ModelDownloadState.NotDownloaded
+        }
     }
 
     private fun mutableState(modelId: String): MutableStateFlow<ModelDownloadState> {
         return stateFlows.getOrPut(modelId) { MutableStateFlow(ModelDownloadState.NotDownloaded) }
     }
 
-    private fun validateRegistry(model: AppModelInfo) {
-        model.artifacts.forEach { artifact ->
-            if (artifact.downloadUrl.startsWith("TODO")) {
-                error("Download URL is not configured for ${artifact.fileName}")
-            }
-            if (!hasConfiguredChecksum(artifact)) {
-                error("SHA-256 is not configured for ${artifact.fileName}")
-            }
+    private fun notConfiguredMessage(model: AppModelInfo): String {
+        return when (model.kind) {
+            ModelKind.LOCAL_LLM ->
+                "Local LLM 모델이 아직 설정되지 않았습니다. MODEL_MANIFEST_URL의 model.litertlm URL과 SHA-256을 확인해 주세요."
+            ModelKind.TEXT_CLASSIFIER ->
+                "KcELECTRA 모델이 아직 설정되지 않았습니다. OpenGlow 분류 태스크에 맞게 fine-tuning된 model.tflite, vocab.txt, tokenizer_config.json, label_map.json이 필요합니다."
         }
     }
 
@@ -164,7 +202,7 @@ class ModelDownloadManager @Inject constructor(
                 val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
                 var downloaded = 0L
                 while (true) {
-                    if (cancelledModelId == model.id) throw IOException("Download cancelled")
+                    throwIfCancelled(model.id)
                     val read = input.read(buffer)
                     if (read == -1) break
                     output.write(buffer, 0, read)
@@ -180,17 +218,27 @@ class ModelDownloadManager @Inject constructor(
             }
         }
 
+        val expectedHash = artifact.sha256.lowercase()
         val hash = tmpFile.sha256()
-        if (hash != artifact.sha256) {
+        if (hash != expectedHash) {
+            tmpFile.delete()
             throw IOException("SHA-256 mismatch for ${artifact.fileName}")
         }
+        if (targetFile.exists()) targetFile.delete()
         if (!tmpFile.renameTo(targetFile)) {
-            throw IOException("Failed to move ${artifact.fileName}")
+            tmpFile.copyTo(targetFile, overwrite = true)
+            tmpFile.delete()
+        }
+    }
+
+    private fun throwIfCancelled(modelId: String) {
+        if (cancelledModelId == modelId) {
+            throw ModelDownloadCancelledException()
         }
     }
 
     private fun hasConfiguredChecksum(artifact: ModelArtifactInfo): Boolean {
-        return artifact.sha256.length == 64 && !artifact.sha256.startsWith("TODO")
+        return artifact.sha256.length == SHA256_LENGTH && !artifact.sha256.startsWith("TODO", ignoreCase = true)
     }
 
     private fun File.sha256(): String {
@@ -206,7 +254,10 @@ class ModelDownloadManager @Inject constructor(
         return digest.digest().joinToString(separator = "") { "%02x".format(it) }
     }
 
+    private class ModelDownloadCancelledException : IOException("Download cancelled")
+
     private companion object {
         private const val TAG = "ModelDownloadManager"
+        private const val SHA256_LENGTH = 64
     }
 }

@@ -16,15 +16,13 @@ class ClassifierModelLoader @Inject constructor(
 ) {
     fun loadFiles(): ClassifierModelFiles? {
         val directory = modelDownloadManager.getKcElectraModelDirectory() ?: return null
-        val model = listOf("model.onnx", "model.tflite")
-            .map { File(directory, it) }
-            .firstOrNull { it.exists() && it.length() > 0L }
+        val model = File(directory, "model.tflite")
+            .takeIf { it.exists() && it.length() > 0L }
             ?: return null
 
         val vocab = File(directory, "vocab.txt").takeIf { it.exists() && it.length() > 0L } ?: return null
-        val tokenizerConfig = listOf("tokenizer_config.json", "tokenizer.json")
-            .map { File(directory, it) }
-            .firstOrNull { it.exists() && it.length() > 0L }
+        val tokenizerConfig = File(directory, "tokenizer_config.json")
+            .takeIf { it.exists() && it.length() > 0L }
             ?: return null
         val labelMap = File(directory, "label_map.json").takeIf { it.exists() && it.length() > 0L } ?: return null
 

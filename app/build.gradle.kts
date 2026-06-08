@@ -43,9 +43,12 @@ android {
             ?: "false"
         val localLlmBackend = localProperties.getProperty("LOCAL_LLM_BACKEND")
             ?: project.findProperty("LOCAL_LLM_BACKEND") as? String
-            ?: "litertlm"
+            ?: "GPU"
         val modelRegistryBaseUrl = localProperties.getProperty("MODEL_REGISTRY_BASE_URL")
             ?: project.findProperty("MODEL_REGISTRY_BASE_URL") as? String
+            ?: ""
+        val modelManifestUrl = localProperties.getProperty("MODEL_MANIFEST_URL")
+            ?: project.findProperty("MODEL_MANIFEST_URL") as? String
             ?: ""
         val ragApiKey = localProperties.getProperty("RAG_API_KEY")
             ?: project.findProperty("RAG_API_KEY") as? String
@@ -60,6 +63,7 @@ android {
         buildConfigField("Boolean", "LOCAL_LLM_ENABLED", enableLocalLlm.toBooleanStrictOrNull()?.toString() ?: "false")
         buildConfigField("String", "LOCAL_LLM_BACKEND", "\"${localLlmBackend.asBuildConfigString()}\"")
         buildConfigField("String", "MODEL_REGISTRY_BASE_URL", "\"${modelRegistryBaseUrl.asBuildConfigString()}\"")
+        buildConfigField("String", "MODEL_MANIFEST_URL", "\"${modelManifestUrl.asBuildConfigString()}\"")
         buildConfigField("String", "RAG_API_KEY", "\"${ragApiKey.asBuildConfigString()}\"")
     }
 
@@ -101,7 +105,10 @@ dependencies {
     implementation(libs.retrofit.converter.gson)
     implementation(libs.okhttp.logging.interceptor)
     implementation(libs.androidx.work.runtime.ktx)
-    implementation(libs.onnxruntime.android)
+    runtimeOnly("com.google.ai.edge.litertlm:litertlm-android:0.13.1") {
+        exclude(group = "org.jetbrains.kotlin")
+    }
+    // TODO: Add TensorFlow Lite only when fine-tuned KcELECTRA TFLite artifacts are ready.
     implementation("androidx.compose.material:material-icons-extended:1.6.0")
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
     implementation(platform(libs.androidx.compose.bom))

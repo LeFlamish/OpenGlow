@@ -25,7 +25,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.openglow.data.model.AppModelInfo
 import com.example.openglow.data.model.ModelDownloadState
-import com.example.openglow.data.model.ModelRegistry
 import com.example.openglow.ui.theme.CardWhite
 
 @Composable
@@ -37,11 +36,12 @@ fun ModelSetupScreen(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         ModelStatusCard(title = "Gemini API") {
             Text("API key configured: ${uiState.geminiApiKeyConfigured}")
+            Text("MODEL_MANIFEST_URL configured: ${uiState.modelManifestUrlConfigured}")
             Text("Gemini 키가 있으면 모델 다운로드 전에도 즉시 알림 분석이 가능합니다.")
         }
 
         ModelCard(
-            model = ModelRegistry.recommendedLocalLlm,
+            model = uiState.localLlmModel,
             state = uiState.localLlmState,
             path = uiState.localLlmPath.orEmpty(),
             helperText = "로컬 AI 모델을 다운로드하면 Gemini 한도 초과 시 기기 안에서 알림을 분석할 수 있습니다. Wi-Fi 환경을 권장합니다.",
@@ -51,10 +51,10 @@ fun ModelSetupScreen(
         )
 
         ModelCard(
-            model = ModelRegistry.recommendedKcElectra,
+            model = uiState.kcElectraModel,
             state = uiState.kcElectraState,
             path = uiState.kcElectraPath.orEmpty(),
-            helperText = "KcELECTRA 분류 모델을 다운로드하면 중요도와 업무 관련 여부를 더 빠르게 판단할 수 있습니다. 원본 Hugging Face PyTorch 모델이 아니라 Android용 ONNX/TFLite 변환 모델을 받습니다.",
+            helperText = "KcELECTRA는 아직 설정되지 않았습니다. 현재는 RuleBased 분류기를 사용합니다.\nKcELECTRA를 사용하려면 OpenGlow 분류 태스크에 맞게 fine-tuning된 model.tflite, vocab.txt, tokenizer_config.json, label_map.json이 필요합니다.",
             onDownload = viewModel::downloadKcElectra,
             onCancel = viewModel::cancelKcElectra,
             onDelete = viewModel::deleteKcElectra,
@@ -72,7 +72,7 @@ fun ModelSetupScreen(
                 }
             }
             OutlinedButton(onClick = viewModel::testClassifier) {
-                Text("KcELECTRA 분류 테스트")
+                Text("KcELECTRA/RuleBased 분류 테스트")
             }
             uiState.testMessage?.let {
                 Text(it)
@@ -148,10 +148,12 @@ private fun ModelStatusCard(
 private fun ModelDownloadState.label(): String = when (this) {
     ModelDownloadState.NotDownloaded -> "Not downloaded"
     ModelDownloadState.Checking -> "Checking"
+    is ModelDownloadState.NotConfigured -> "Not configured: $message"
     is ModelDownloadState.Downloading -> "Downloading"
     is ModelDownloadState.Verifying -> "Verifying"
     is ModelDownloadState.Ready -> "Ready"
     is ModelDownloadState.Failed -> "Failed: $message"
+    is ModelDownloadState.Cancelled -> "Cancelled"
 }
 
 private fun Long.formatBytes(): String {

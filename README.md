@@ -1,76 +1,119 @@
 # OpenGlow
 
-## Gemini local setup
+## Local Setup
 
-Keep Gemini credentials in `local.properties`. This file is already ignored by Git.
+Keep local-only keys and model settings in `local.properties`. This file is ignored by Git.
 
 ```properties
 sdk.dir=C\:\\Users\\jiuk0\\AppData\\Local\\Android\\Sdk
 GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-3.5-flash
+ENABLE_LOCAL_LLM=true
+LOCAL_LLM_BACKEND=GPU
+MODEL_MANIFEST_URL=https://github.com/COR-VOX/CORVOX-Website/releases/download/models-v1/model_manifest.json
 ```
 
-Do not commit a real API key. `app/build.gradle.kts` injects these values into
-`BuildConfig.GEMINI_API_KEY` and `BuildConfig.GEMINI_MODEL` for local prototype
-builds only.
+`MODEL_MANIFEST_URL` is preferred over the built-in placeholder registry. If it is
+missing, or if a model artifact has no URL or SHA-256, the setup screen shows
+`NotConfigured` instead of trying a broken download.
 
-## Test flow
+## Model Manifest
 
-1. Add `GEMINI_API_KEY` and `GEMINI_MODEL` to `local.properties`.
-2. Build and run the app.
-3. Grant notification listener access.
-4. Receive a KakaoTalk personal message and confirm an individual note is created.
-5. Receive a KakaoTalk group message and confirm a group note is created.
-6. Receive SMS and email notifications and confirm SMS/EMAIL platform notes appear.
-7. Send multiple notifications from the same person or group and confirm they accumulate in the same note.
-8. Check the note card for summary, importance, work-related status, action items, deadline, and updated time.
+OpenGlow downloads large model files into app-private storage after install.
+The local LLM is stored at:
 
-## Logcat
+```text
+context.filesDir/models/local_llm/model.litertlm
+```
 
-Useful tags:
+Manifest example:
 
-- `GeminiLlmClient`
-- `NotificationRepo`
-- `NoteDaoDebug`
+```json
+{
+  "models": [
+    {
+      "id": "local_llm_qwen2_5_1_5b",
+      "version": "1.0.0",
+      "kind": "LOCAL_LLM",
+      "targetDirectoryName": "local_llm",
+      "artifacts": [
+        {
+          "fileName": "model.litertlm",
+          "url": "https://github.com/COR-VOX/CORVOX-Website/releases/download/models-v1/model.litertlm",
+          "sha256": "replace_with_64_char_sha256",
+          "sizeBytes": 1600000000
+        }
+      ]
+    }
+  ]
+}
+```
 
-The logs show model name, API-key presence, Gemini call lifecycle, parsing status,
-and note create/update status. They must not print the full API key or full
-notification body.
+The manifest may contain only the `LOCAL_LLM` model. If KcELECTRA is absent, the
+app remains usable and keeps the classifier on RuleBased fallback.
 
-## Release note
+## Preparing `model.litertlm`
 
-The direct Gemini call is for prototype use only. Before release, route analysis
-through a backend server because Android APKs can be inspected and any API key
-embedded in `BuildConfig` can be extracted.
+1. Convert or export the chosen on-device LLM into LiteRT-LM format as
+   `model.litertlm`.
+2. Calculate SHA-256 on Windows:
 
-## On-device model downloads
+```powershell
+Get-FileHash .\model.litertlm -Algorithm SHA256
+```
 
-OpenGlow does not bundle large model files inside the APK. The app is structured
-to download model artifacts into internal app storage after installation:
+3. Create a GitHub Release, for example `models-v1`.
+4. Upload `model.litertlm` and `model_manifest.json` to that release.
+5. Put the release asset URL for `model_manifest.json` into
+   `MODEL_MANIFEST_URL`.
 
-- Local LLM: `context.filesDir/models/local_llm/model.litertlm`
-- KcELECTRA classifier: `context.filesDir/models/kcelectra/model.onnx` or
-  `model.tflite`, plus `vocab.txt`, `tokenizer_config.json` or `tokenizer.json`,
-  and `label_map.json`
+After download and SHA-256 verification, Local LLM fallback uses LiteRT-LM. The
+client tries GPU first and falls back to CPU if GPU initialization fails.
 
-`ModelRegistry` owns model IDs, artifact names, download URLs, sizes, and
-SHA-256 checksums. The current prototype leaves URLs and checksums as TODO
-placeholders. Production can host the converted artifacts on Firebase Storage,
-Cloudflare R2, S3, Hugging Face, GitHub Releases, or another CDN, then update
-`ModelRegistry`.
+## KcELECTRA Status
 
-KcELECTRA download support expects an Android-executable converted model. It
-does not download the original Hugging Face PyTorch model and try to run it on
-Android. The intended flow is:
+KcELECTRA is not active in the current build. Do not upload the original PyTorch
+checkpoint and expect Android inference. To enable it later, prepare an
+OpenGlow-task-specific fine-tuned TFLite package:
 
-1. Collect feedback data from the app.
-2. Fine-tune KcELECTRA on a PC or server.
-3. Convert the trained classifier to ONNX or TFLite.
-4. Upload model, vocab, tokenizer config, label map, and SHA-256 checksums.
-5. Update `ModelRegistry`.
-6. Let the app download and verify the files.
+```text
+model.tflite
+vocab.txt
+tokenizer_config.json
+label_map.json
+```
 
-The app does not perform real-time fine-tuning internally. It performs feedback
-based personalization rules and, when available, on-device KcELECTRA inference.
-When a model is missing, download fails, checksum verification fails, or runtime
-loading fails, the app falls back to Gemini and rule-based analysis.
+Until those files and the TFLite runtime path are wired, the setup screen shows:
+
+```text
+KcELECTRA는 아직 설정되지 않았습니다. 현재는 RuleBased 분류기를 사용합니다.
+```
+
+The app currently works as Gemini + Local LLM + RuleBased. If Gemini fails,
+OpenGlow tries Local LLM when `ENABLE_LOCAL_LLM=true` and `model.litertlm` is
+ready. If Local LLM also fails, it falls back to RuleBased analysis.
+
+## Verification
+
+Useful checks before release:
+
+```powershell
+.\gradlew.bat :app:testDebugUnitTest
+.\gradlew.bat :app:assembleDebug
+```
+
+Inspect the generated APK and confirm it does not contain `libonnxruntime.so` or
+`libonnxruntime4j_jni.so`. ONNX Runtime is intentionally not a dependency.
+
+Functional checks:
+
+1. Without `MODEL_MANIFEST_URL`, Local LLM shows `NotConfigured`.
+2. With a manifest containing only `local_llm_qwen2_5_1_5b`, `model.litertlm`
+   downloads and verifies.
+3. After download, Local LLM availability becomes true when
+   `ENABLE_LOCAL_LLM=true`.
+4. KcELECTRA missing files must not crash the app.
+5. Current classifier remains `RuleBased`.
+6. Notification notes store the final summary only; unread/count notification
+   noise is filtered.
+7. Approved calendar suggestions are saved into the in-app calendar tab.
