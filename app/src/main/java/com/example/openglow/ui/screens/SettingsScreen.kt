@@ -14,6 +14,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SnackbarHost
@@ -29,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.openglow.BuildConfig
+import com.example.openglow.data.model.ModelDownloadState
 import com.example.openglow.ui.theme.BackgroundGray
 import com.example.openglow.ui.theme.CardWhite
 
@@ -37,6 +39,8 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val modelSetupViewModel: ModelSetupViewModel = hiltViewModel()
+    val modelUiState by modelSetupViewModel.uiState.collectAsState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(uiState.exportMessage) {
@@ -105,12 +109,47 @@ fun SettingsScreen(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = "모델 파일은 Git에 포함하지 않습니다. 생성된 LoRA/adapter 또는 교체 모델은 설정된 경로에 배치한 뒤 LocalLlmClient 런타임에 연결하는 구조입니다.",
+                    text = "모델 파일은 Git에 포함하지 않습니다. 아래 버튼을 누르면 GitHub 릴리즈에서 기기로 바로 다운로드하며, LocalLlmClient가 해당 파일을 사용합니다.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
+
+                val localLlmState = modelUiState.localLlmState
+                val isDownloading = localLlmState is ModelDownloadState.Downloading
+
+                Button(
+                    onClick = { modelSetupViewModel.downloadLocalLlm() },
+                    enabled = !isDownloading,
+                ) {
+                    Text(
+                        when {
+                            isDownloading -> "다운로드 중…"
+                            localLlmState is ModelDownloadState.Ready -> "모델 파일 다시 다운로드"
+                            else -> "모델 파일 다운로드"
+                        },
+                    )
+                }
+                if (localLlmState is ModelDownloadState.Downloading) {
+                    LinearProgressIndicator(
+                        progress = { localLlmState.progress.coerceIn(0f, 1f) },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                if (localLlmState is ModelDownloadState.Ready) {
+                    Text(
+                        text = "다운로드 완료. 로컬 모델을 사용할 수 있습니다.",
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+                if (localLlmState is ModelDownloadState.Failed) {
+                    Text(
+                        text = "다운로드 실패: ${localLlmState.message}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                }
             }
 
-            ModelSetupScreen()
+            ModelSetupScreen(modelSetupViewModel)
         }
     }
 }

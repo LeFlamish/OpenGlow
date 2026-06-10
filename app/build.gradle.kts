@@ -49,7 +49,7 @@ android {
             ?: ""
         val modelManifestUrl = localProperties.getProperty("MODEL_MANIFEST_URL")
             ?: project.findProperty("MODEL_MANIFEST_URL") as? String
-            ?: ""
+            ?: "https://github.com/LeFlamish/OpenGlow/releases/download/models-v1/model_manifest.json"
         val ragApiKey = localProperties.getProperty("RAG_API_KEY")
             ?: project.findProperty("RAG_API_KEY") as? String
             ?: ""

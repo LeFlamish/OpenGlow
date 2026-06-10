@@ -36,8 +36,8 @@ object ModelRegistry {
         artifacts = listOf(
             ModelArtifactInfo(
                 fileName = "model.litertlm",
-                downloadUrl = "TODO_MODEL_DOWNLOAD_URL",
-                sha256 = "TODO_SHA256",
+                downloadUrl = "https://github.com/LeFlamish/OpenGlow/releases/download/models-v1/model.litertlm",
+                sha256 = "faa60663b333290c1496c499828b21d3e3254a788cacd8cce917ce0f761a2dc9",
                 sizeBytes = 1_600_000_000L,
             ),
         ),
