@@ -166,6 +166,31 @@ class NoteViewModel @Inject constructor(
         feedbackMessage.value = null
     }
 
+    fun updateFinalSummary(noteId: Long, newSummary: String) {
+        val trimmed = newSummary.trim()
+        if (trimmed.isBlank()) {
+            feedbackMessage.value = "최종 정리본은 비워둘 수 없어요."
+            return
+        }
+        viewModelScope.launch {
+            runCatching {
+                val note = noteDao.getNoteById(noteId) ?: error("No note for id $noteId")
+                if (note.finalSummary == trimmed) return@runCatching
+                noteDao.updateNote(
+                    note.copy(
+                        finalSummary = trimmed,
+                        updatedAt = System.currentTimeMillis(),
+                    ),
+                )
+            }.onSuccess {
+                feedbackMessage.value = "최종 정리본을 수정했어요."
+            }.onFailure {
+                Log.e(TAG, "Failed to update final summary: ${it.message}")
+                feedbackMessage.value = "최종 정리본 수정에 실패했어요."
+            }
+        }
+    }
+
     fun submitFeedback(
         noteId: Long,
         correctedImportance: String?,

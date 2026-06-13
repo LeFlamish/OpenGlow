@@ -1,6 +1,9 @@
 package com.example.openglow.domain.llm
 
 import com.google.gson.Gson
+import com.google.gson.Strictness
+import com.google.gson.stream.JsonReader
+import java.io.StringReader
 import java.util.Locale
 
 object AnalysisJsonParser {
@@ -14,16 +17,44 @@ object AnalysisJsonParser {
             ?: return Result.failure(IllegalArgumentException("LLM response did not contain a JSON object"))
 
         return runCatching {
-            val payload = gson.fromJson(json, AnalysisPayload::class.java)
+            val reader = JsonReader(StringReader(json)).apply { strictness = Strictness.LENIENT }
+            val payload = gson.fromJson<AnalysisPayload>(reader, AnalysisPayload::class.java)
+                ?: error("LLM response JSON was empty")
             payload.toResult(fallbackInput, modelSource).validated(fallbackInput)
         }
     }
 
+    /**
+     * Extracts the first complete JSON object, tolerating surrounding prose or markdown code
+     * fences. Scans from the first '{' to its balanced closing '}', ignoring braces inside
+     * string literals so any trailing text or a second object is dropped.
+     */
     private fun String.extractJsonObject(): String? {
         val start = indexOf('{')
-        val end = lastIndexOf('}')
-        if (start == -1 || end == -1 || end <= start) return null
-        return substring(start, end + 1)
+        if (start == -1) return null
+        var depth = 0
+        var inString = false
+        var escaped = false
+        for (i in start until length) {
+            val c = this[i]
+            if (inString) {
+                when {
+                    escaped -> escaped = false
+                    c == '\\' -> escaped = true
+                    c == '"' -> inString = false
+                }
+            } else {
+                when (c) {
+                    '"' -> inString = true
+                    '{' -> depth++
+                    '}' -> {
+                        depth--
+                        if (depth == 0) return substring(start, i + 1)
+                    }
+                }
+            }
+        }
+        return null
     }
 
     private fun AnalysisPayload.toResult(

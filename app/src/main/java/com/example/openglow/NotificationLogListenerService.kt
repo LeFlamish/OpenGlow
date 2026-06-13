@@ -88,13 +88,49 @@ class NotificationLogListenerService : NotificationListenerService() {
 
     private fun logNotification(notification: ReceivedNotification) {
         // Notification content is sensitive. Never print the full payload in production logs.
+        // Log.i(
+        //     TAG,
+        //     "Notification received: packageName=${notification.packageName}, " +
+        //         "postTime=${notification.postTime}, category=${notification.category}, " +
+        //         "textLength=${notification.extractedFullText.length}, " +
+        //         "confidence=${notification.completenessConfidence}",
+        // )
+
+        val importantExtras = REQUESTED_EXTRA_KEYS.joinToString(separator = "\n") { key ->
+            "$key = ${NotificationValueFormatter.toReadableString(notification.extras[key])}"
+        }
+
+        val allExtras = notification.extras.entries.joinToString(separator = "\n") { (key, value) ->
+            "$key = ${NotificationValueFormatter.toReadableString(value)}"
+        }
+
         Log.i(
             TAG,
-            "Notification received: packageName=${notification.packageName}, " +
-                "postTime=${notification.postTime}, category=${notification.category}, " +
-                "textLength=${notification.extractedFullText.length}, " +
-                "confidence=${notification.completenessConfidence}",
+            """
+            ================ 알림 수신 ================
+            packageName: ${notification.packageName}
+            appName: ${notification.appName}
+            notificationKey: ${notification.notificationKey}
+            postTime: ${notification.postTimeText} (${notification.postTime})
+            category: ${notification.category}
+
+            title: ${notification.title}
+            text: ${notification.text}
+            subText: ${notification.subText}
+            bigText: ${notification.bigText}
+            summaryText: ${notification.summaryText}
+            conversationTitle: ${notification.conversationTitle}
+            infoText: ${notification.infoText}
+
+            주요 extras:
+            $importantExtras
+
+            전체 extras:
+            $allExtras
+            ==========================================
+            """.trimIndent(),
         )
+
     }
 
     private fun findAppName(packageName: String): String {
@@ -111,5 +147,21 @@ class NotificationLogListenerService : NotificationListenerService() {
     companion object {
         private const val TAG = "NotificationListener"
         private val DATE_FORMAT = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.KOREA)
+
+        // 로그에서 먼저 확인하고 싶은 핵심 extras 키 목록.
+        private val REQUESTED_EXTRA_KEYS = listOf(
+            Notification.EXTRA_TITLE,
+            Notification.EXTRA_TEXT,
+            Notification.EXTRA_SUB_TEXT,
+            Notification.EXTRA_BIG_TEXT,
+            Notification.EXTRA_SUMMARY_TEXT,
+            Notification.EXTRA_INFO_TEXT,
+            Notification.EXTRA_TEXT_LINES,
+            Notification.EXTRA_MESSAGES,
+            "android.conversationTitle",
+            "android.isGroupConversation",
+            "android.template",
+            "android.remoteInputHistory",
+        )
     }
 }

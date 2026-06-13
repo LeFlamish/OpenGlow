@@ -83,8 +83,9 @@ object AnalysisPromptBuilder {
     """.trimIndent()
 
     fun buildLocalPrompt(input: NoteUpdateInput): String = """
-        Summarize this notification into the user's note.
-        Return JSON only. Do not append raw text.
+        You summarize a mobile notification into the user's note.
+        Output ONLY one JSON object. No markdown, no code fences, no comments,
+        and no text before or after it. Start with { and end with }.
 
         Platform: ${input.platform}
         Scope: ${input.senderScope}
@@ -93,9 +94,29 @@ object AnalysisPromptBuilder {
         New text: ${input.newNotificationText}
         Classifier hint: ${input.classificationHint ?: "none"}
 
-        JSON keys:
-        oneLineSummary, importance LOW/NORMAL/HIGH/URGENT, isWorkRelated, senderScope,
-        noteTitle, updatedFinalSummary, retainedFacts, actionItems, deadlineText,
-        meetingDetected, projectDetected, shouldAskFeedback, confidence.
+        Return exactly this JSON shape, keeping the keys and filling the values:
+        {
+          "oneLineSummary": "한 줄 요약",
+          "importance": "NORMAL",
+          "isWorkRelated": false,
+          "senderScope": "INDIVIDUAL",
+          "noteTitle": "제목",
+          "updatedFinalSummary": "기존 요약과 새 알림을 합친 최신 요약",
+          "retainedFacts": [],
+          "actionItems": [],
+          "deadlineText": null,
+          "meetingDetected": false,
+          "projectDetected": false,
+          "shouldAskFeedback": false,
+          "confidence": 0.8
+        }
+
+        Constraints:
+        - importance is one of LOW, NORMAL, HIGH, URGENT.
+        - senderScope is one of INDIVIDUAL, GROUP, UNKNOWN.
+        - isWorkRelated, meetingDetected, projectDetected, shouldAskFeedback are true or false.
+        - confidence is a number between 0 and 1; deadlineText is a string or null.
+        - retainedFacts and actionItems are arrays of short strings (may be empty).
+        - Write summaries in Korean. Do not paste the raw notification text verbatim.
     """.trimIndent()
 }

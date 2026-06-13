@@ -10,7 +10,7 @@ GEMINI_API_KEY=your_gemini_api_key
 GEMINI_MODEL=gemini-3.5-flash
 ENABLE_LOCAL_LLM=true
 LOCAL_LLM_BACKEND=GPU
-MODEL_MANIFEST_URL=https://github.com/COR-VOX/CORVOX-Website/releases/download/models-v1/model_manifest.json
+MODEL_MANIFEST_URL=https://github.com/LeFlamish/OpenGlow/releases/download/models-v1/model_manifest.json
 ```
 
 `MODEL_MANIFEST_URL` is preferred over the built-in placeholder registry. If it is

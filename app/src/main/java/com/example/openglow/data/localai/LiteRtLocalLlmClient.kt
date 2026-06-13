@@ -11,8 +11,6 @@ import java.io.File
 import java.lang.reflect.InvocationTargetException
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -54,9 +52,13 @@ class LiteRtLocalLlmClient @Inject constructor(
                 )
                 engineMutex.withLock {
                     val engine = getOrCreateEngine(modelFile)
-                    runConversation(engine, prompt).ifBlank {
+                    val response = runConversation(engine, prompt).ifBlank {
                         error("Local LLM returned an empty response")
                     }
+                    if (BuildConfig.DEBUG) {
+                        Log.d(TAG, "Local LLM raw response (len=${response.length}): ${response.take(1000)}")
+                    }
+                    response
                 }
             }
         }
@@ -131,7 +133,7 @@ class LiteRtLocalLlmClient @Inject constructor(
         return engine
     }
 
-    private suspend fun runConversation(engine: Any, prompt: String): String {
+    private fun runConversation(engine: Any, prompt: String): String {
         val conversationConfigClass = Class.forName("$LITERT_PACKAGE.ConversationConfig")
         val conversationConfig = conversationConfigClass.getConstructor().newInstance()
         val conversation = engine.javaClass
@@ -139,31 +141,37 @@ class LiteRtLocalLlmClient @Inject constructor(
             .invoke(engine, conversationConfig)
             ?: error("LiteRT-LM failed to create a conversation")
         return try {
-            val flow = conversation.javaClass
-                .getMethod("sendMessageAsync", String::class.java, Map::class.java)
-                .invoke(conversation, prompt, emptyMap<String, Any>()) as Flow<*>
-            val response = StringBuilder()
-            flow.collect { message ->
-                response.append(renderMessage(conversation, message))
-            }
-            response.toString().trim()
+            val message = conversation.javaClass
+                .getMethod("sendMessage", String::class.java, Map::class.java)
+                .invoke(conversation, prompt, emptyMap<String, Any>())
+            extractMessageText(message)
         } finally {
             closeQuietly(conversation)
         }
     }
 
-    private fun renderMessage(conversation: Any, message: Any?): String {
+    /**
+     * Pulls the assistant's plain text out of a LiteRT-LM [Message] by reading its
+     * Contents -> List<Content> and concatenating every Content.Text value. Avoids
+     * renderMessageIntoString, which re-emits ChatML role headers like "<|im_start|>assistant".
+     */
+    private fun extractMessageText(message: Any?): String {
         if (message == null) return ""
-        val messageClass = Class.forName("$LITERT_PACKAGE.Message")
         return runCatching {
-            conversation.javaClass
-                .getMethod("renderMessageIntoString", messageClass, Map::class.java)
-                .invoke(conversation, message, emptyMap<String, Any>())
-                ?.toString()
-                .orEmpty()
-        }.getOrElse {
-            message.toString()
-        }
+            val contents = message.javaClass.getMethod("getContents").invoke(message)
+            val items = contents?.let {
+                it.javaClass.getMethod("getContents").invoke(it) as? List<*>
+            }.orEmpty()
+            val textClass = Class.forName("$LITERT_PACKAGE.Content\$Text")
+            val getText = textClass.getMethod("getText")
+            buildString {
+                items.forEach { item ->
+                    if (item != null && textClass.isInstance(item)) {
+                        append(getText.invoke(item) as? String ?: "")
+                    }
+                }
+            }.trim()
+        }.getOrElse { "" }
     }
 
     private fun preferredBackendNames(): List<String> {

@@ -152,6 +152,9 @@ fun NoteScreen(
                 selectedNote = null
                 feedbackNote = note
             },
+            onSaveFinalSummary = { newSummary ->
+                viewModel.updateFinalSummary(note.id, newSummary)
+            },
         )
     }
 
@@ -356,17 +359,43 @@ private fun NoteDetailDialog(
     note: NoteUiModel,
     onDismiss: () -> Unit,
     onFeedbackClick: () -> Unit,
+    onSaveFinalSummary: (String) -> Unit,
 ) {
+    var isEditing by remember(note.id) { mutableStateOf(false) }
+    // committedSummary: 마지막으로 저장된 값(노트 시작값에서 출발, 저장 시 갱신).
+    // selectedNote 스냅샷이 갱신되지 않아도 다이얼로그가 최신 값을 보여주도록 별도로 추적한다.
+    var committedSummary by remember(note.id) { mutableStateOf(note.finalSummary) }
+    var editedSummary by remember(note.id) { mutableStateOf(note.finalSummary) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text("닫기")
+            if (isEditing) {
+                TextButton(
+                    onClick = {
+                        onSaveFinalSummary(editedSummary)
+                        committedSummary = editedSummary
+                        isEditing = false
+                    },
+                    enabled = editedSummary.isNotBlank(),
+                ) {
+                    Text("저장")
+                }
+            } else {
+                TextButton(onClick = onDismiss) {
+                    Text("닫기")
+                }
             }
         },
         dismissButton = {
-            TextButton(onClick = onFeedbackClick) {
-                Text("판단 수정하기")
+            if (isEditing) {
+                TextButton(onClick = { isEditing = false }) {
+                    Text("취소")
+                }
+            } else {
+                TextButton(onClick = onFeedbackClick) {
+                    Text("판단 수정하기")
+                }
             }
         },
         title = {
@@ -390,12 +419,39 @@ private fun NoteDetailDialog(
                         .padding(4.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Text("최종 정리본", fontWeight = FontWeight.Bold)
-                    Text(
-                        text = note.finalSummary,
-                        fontSize = 14.sp,
-                        lineHeight = 20.sp,
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text("최종 정리본", fontWeight = FontWeight.Bold)
+                        if (!isEditing) {
+                            TextButton(
+                                onClick = {
+                                    editedSummary = committedSummary
+                                    isEditing = true
+                                },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp),
+                            ) {
+                                Text("수정", color = PointBlue)
+                            }
+                        }
+                    }
+                    if (isEditing) {
+                        OutlinedTextField(
+                            value = editedSummary,
+                            onValueChange = { editedSummary = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            minLines = 4,
+                            textStyle = MaterialTheme.typography.bodyMedium,
+                        )
+                    } else {
+                        Text(
+                            text = committedSummary,
+                            fontSize = 14.sp,
+                            lineHeight = 20.sp,
+                        )
+                    }
 
                     if (note.retainedFacts.isNotEmpty()) {
                         Text("보존된 핵심 사실", fontWeight = FontWeight.Bold)
